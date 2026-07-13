@@ -1,0 +1,35 @@
+# Binaries & build output
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/bin/
+/dist/
+
+# Test & coverage artifacts
+*.test
+*.out
+coverage.*
+profile.*
+*.prof
+
+# Go workspace sum (go.work itself IS committed — it defines the module set)
+go.work.sum
+
+# Dependency vendoring (not used here)
+/vendor/
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local env overrides
+.env
+.env.local
