@@ -6,7 +6,7 @@
 *.dylib
 /bin/
 /dist/
-
+/docs/internal
 # Test & coverage artifacts
 *.test
 *.out
