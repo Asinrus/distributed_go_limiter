@@ -1,7 +1,7 @@
 // Package redisext is the Redis storage backend for the distributed rate limiter.
 // It implements core.CASStore using compare-and-swap: the token math runs in core
 // (client-side), Redis only provides atomic get / conditional-set. See
-// docs/project/EXT_REDIS.md.
+// docs/internal/project/EXT_REDIS.md.
 package redisext
 
 import (

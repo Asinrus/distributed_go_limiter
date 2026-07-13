@@ -14,6 +14,12 @@ store is a dumb byte-blob KV with one concurrency primitive (compare-and-swap, o
 row lock). The client reads bytes → runs the math in `core` → writes bytes back
 atomically. So the algorithm lives once, in `core`.
 
+## Process & context
+Roles, process, and progress live in **`ai-context/`** (start with
+`ai-context/README.md`; `ai-context/PLANS.md` is the architect-owned progress
+tracker). Detailed design and investigation notes are kept local under
+`docs/internal/` (untracked).
+
 ## Layout (go.work workspace, 3 modules)
 Root is a `go.work` workspace, **not** a module — build/test per module.
 
@@ -36,20 +42,10 @@ Root is a `go.work` workspace, **not** a module — build/test per module.
 - `redis/` (package `redisext`) — `CASStore` via Lua compare-and-swap + `SET NX`.
 - `postgres/` (package `pgext`) — `LockStore` via `SELECT … FOR UPDATE`.
 
-## Docs & roles
-- `PLANS.md` (root) — progress tracker. **Architect-owned; only the architect edits it.**
-- `docs/project/` — design docs: `ARCHITECTURE.md` (mermaid + provider-swap examples),
-  `EXT_REDIS.md`, `EXT_POSTGRES.md`, `ACCEPTANCE_CRITERIA.md`, `QUESTIONS_TO_ARCHITECT.md`.
-- `docs/bucket4j/` — investigation of the reference library (read-only).
-
-Roles: **Architect** owns `PLANS.md` + `docs/project/` and may dispatch an
-**Investigator** (findings → `docs/bucket4j/`). **Dev** implements TDD against
-`ACCEPTANCE_CRITERIA.md`. On a verification failure the Investigator writes
-`docs/project/problem_reports/<phase>-<n>.md` and triggers Dev (code) or Architect (spec).
-
 ## Conventions
-- **TDD, tests first.** `ACCEPTANCE_CRITERIA.md` is the contract; each criterion has a
-  stable ID (AC-11 … AC-46) referenced from the test name (`TestAC12_...`).
+- **TDD, tests first.** The acceptance criteria (in `ai-context/`) are the contract;
+  each criterion has a stable ID (AC-11 … AC-46) referenced from the test name
+  (`TestAC12_...`). The shared `core/tck` suite is their executable form.
 - **v1 = single bandwidth per bucket.** Deferred: multi-bandwidth, async, verbose
   diagnostics, optimization/batching, config replacement + versioning, grid providers.
 - New distributed backend = implement `core.CASStore` **or** `core.LockStore`, then

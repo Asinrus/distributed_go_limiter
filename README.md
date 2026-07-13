@@ -23,12 +23,12 @@ b := core.NewLocalBucket(cfg)              // in-memory
 - `postgres/` — Postgres backend (SELECT … FOR UPDATE).
 
 ## Docs
-- `PLANS.md` — progress tracker (architect-owned).
-- `docs/project/` — architecture, per-backend design, acceptance criteria.
-- `docs/bucket4j/` — investigation of the reference library.
+- `ai-context/` — process, roles, and progress (`ai-context/PLANS.md` tracker).
+- `CLAUDE.md` — code map + build/test commands.
+- Detailed design & investigation notes are kept local under `docs/internal/` (untracked).
 
 ## Status
-v1: single bandwidth per bucket, blocking consume, three backends. See `PLANS.md`.
+v1: single bandwidth per bucket, blocking consume, three backends. See `ai-context/PLANS.md`.
 
 ## Test
 The repo root is a `go.work` workspace (not a module), so build/test per module:

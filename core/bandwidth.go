@@ -1,6 +1,6 @@
 // Package core defines the token-bucket API and algorithm for a distributed
 // rate limiter. The token math lives here once; storage providers (local,
-// Redis, Postgres) only supply an atomic Store. See docs/project/ARCHITECTURE.md.
+// Redis, Postgres) only supply an atomic Store. See docs/internal/project/ARCHITECTURE.md.
 package core
 
 import "time"

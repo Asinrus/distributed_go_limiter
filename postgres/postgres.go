@@ -1,7 +1,7 @@
 // Package pgext is the Postgres storage backend for the distributed rate limiter.
 // It implements core.LockStore using SELECT ... FOR UPDATE: the row lock is held
 // across the read-modify-write, so concurrent updaters serialize with no CAS loop.
-// The token math runs in core. See docs/project/EXT_POSTGRES.md.
+// The token math runs in core. See docs/internal/project/EXT_POSTGRES.md.
 package pgext
 
 import (

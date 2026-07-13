@@ -2,7 +2,7 @@
 
 > **Architect-owned.** Only the architect writes here. Living progress tracker:
 > phases, status, decisions, and outcomes. Dev/investigator read it; they raise
-> changes via `docs/project/QUESTIONS_TO_ARCHITECT.md` or `problem_reports/`.
+> changes via `docs/internal/project/QUESTIONS_TO_ARCHITECT.md` or `problem_reports/`.
 
 ## Goal
 Port bucket4j's token-bucket (shared-state, not queue) to Go. `core` module owns
@@ -21,8 +21,8 @@ the algorithm + API; `redis` and `postgres` modules are pluggable backends.
 ## Phases & status
 | # | Phase | Status | Notes |
 |---|-------|--------|-------|
-| 0 | Investigation (docs/bucket4j) | ✅ done | 3 agent reports + Infinispan article |
-| 1 | Architect docs (docs/project) | ✅ done | ARCHITECTURE (+mermaid, swap examples), EXT_*, ACCEPTANCE_CRITERIA, QUESTIONS |
+| 0 | Investigation (docs/internal/bucket4j) | ✅ done | 3 agent reports + Infinispan article |
+| 1 | Architect docs (docs/internal/project) | ✅ done | ARCHITECTURE (+mermaid, swap examples), EXT_*, ACCEPTANCE_CRITERIA, QUESTIONS |
 | 2 | core: state/bandwidth/config/probe (TDD) | ✅ done | AC-11..19 tests written |
 | 3 | core: LocalBucket + BlockingBucket (TDD) | ✅ done | AC-21..23, AC-31/32 tests written |
 | 4 | core: Store/ProxyManager/command/codec/memstore + TCK | ✅ done | AC-41..46 via in-memory; codec + AC-45 TTL |
@@ -55,13 +55,13 @@ with `unqualified-search-registries = ["docker.io"]` for short image names.
 Legend: ✅ done · 🟡 in progress · ⬜ pending · ❌ blocked.
 
 ## Definition of done (per phase)
-Every acceptance criterion for the phase (see `docs/project/ACCEPTANCE_CRITERIA.md`)
+Every acceptance criterion for the phase (see `docs/internal/project/ACCEPTANCE_CRITERIA.md`)
 has a passing test. `go build ./...` + `go vet ./...` clean. Backends pass the TCK
 against a real container.
 
 ## Failure-handling loop
 On any verification failure → investigator writes
-`docs/project/problem_reports/<phase>-<n>.md` (symptom, failing AC id, root cause,
+`docs/internal/project/problem_reports/<phase>-<n>.md` (symptom, failing AC id, root cause,
 defect-vs-spec-gap) → triggers Dev (code fix) or Architect (spec/design fix) →
 loop until AC pass. Architect records outcome here.
 
