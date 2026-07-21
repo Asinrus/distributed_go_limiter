@@ -6,21 +6,28 @@ pluggable storage provider — swap **local ↔ Redis ↔ Postgres** without cha
 your rate-limiting code.
 
 ```go
-func handle(b core.Bucket) {
-    if b.TryConsume(1) { serve() } else { rejectHTTP429() }
+func handle(ctx context.Context, b core.Bucket) {
+    if ok, err := b.TryConsume(ctx, 1); err == nil && ok {
+        serve()
+    } else {
+        rejectHTTP429()
+    }
 }
 
 cfg := core.NewConfig(core.NewBandwidth(50).RefillGreedy(10, time.Second))
 
-b := core.NewLocalBucket(cfg)              // in-memory
-// b := redisext.NewProxyManager(rdb).Bucket("user:42", cfg)   // Redis
-// b := pgext.NewProxyManager(pool).Bucket("user:42", cfg)     // Postgres
+// The config is validated once, here — every bucket that exists is usable.
+b, err := core.NewLocalBucket(cfg)                             // in-memory
+// b, err := redisext.NewProxyManager(rdb).Bucket("user:42", cfg)  // Redis
+// b, err := pgext.NewProxyManager(pool).Bucket("user:42", cfg)    // Postgres
 ```
 
 ## Modules
 - `core/` — API + token-bucket algorithm, zero external runtime deps.
 - `redis/` — Redis backend (compare-and-swap via Lua).
 - `postgres/` — Postgres backend (SELECT … FOR UPDATE).
+- `examples/` — a Gin API wired to each backend, with docker-compose files
+  (`cd examples/redis && docker compose up -d && go run .`).
 
 ## Docs
 - `ai-context/` — process, roles, and progress (`ai-context/PLANS.md` tracker).

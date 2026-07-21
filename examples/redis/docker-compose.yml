@@ -1,0 +1,32 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command:
+      - redis-server
+      # Rate-limit state is disposable. If Redis restarts empty every client just
+      # gets a fresh allowance — a safe failure — so skip persistence and the
+      # fsync cost that comes with it. Turn RDB back on only if you would rather
+      # limits survive a restart than have faster writes.
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      # Bound the memory a flood of distinct keys can take. volatile-ttl evicts
+      # the soonest-to-expire key first and only ever touches keys that HAVE a
+      # TTL — which is why the app must set redisext.WithTTL. Without a TTL on
+      # the keys this policy has nothing to evict and writes fail with OOM.
+      #
+      # Eviction grants the evicted client a fresh allowance, so size maxmemory
+      # so it does not happen routinely: ~100 bytes per bucket, one bucket per
+      # (scope, client).
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - volatile-ttl
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 15

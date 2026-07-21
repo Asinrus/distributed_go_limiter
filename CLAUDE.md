@@ -20,7 +20,7 @@ Roles, process, and progress live in **`ai-context/`** (start with
 tracker). Detailed design and investigation notes are kept local under
 `docs/internal/` (untracked).
 
-## Layout (go.work workspace, 3 modules)
+## Layout (go.work workspace, 4 modules)
 Root is a `go.work` workspace, **not** a module — build/test per module.
 
 - `core/` — API + algorithm, **zero external runtime deps**.
@@ -41,6 +41,13 @@ Root is a `go.work` workspace, **not** a module — build/test per module.
     runs the SAME suite; this is how provider-swap (AC-46) is proven.
 - `redis/` (package `redisext`) — `CASStore` via Lua compare-and-swap + `SET NX`.
 - `postgres/` (package `pgext`) — `LockStore` via `SELECT … FOR UPDATE`.
+- `examples/` — a Gin API wired to each backend. `examples/api/` is the shared
+  HTTP layer (router + rate-limit middleware) and must stay **provider-agnostic**;
+  `examples/redis/` and `examples/postgres/` are `main` packages that differ only
+  in how they build the `*core.ProxyManager`, each with a `docker-compose.yml`.
+  If a change forces a provider-specific branch into `api/`, the swap goal has
+  regressed. Needs Go 1.25 (gin), hence the `go.work` floor; the three library
+  modules stay on 1.23.
 
 ## Conventions
 - **TDD, tests first.** The acceptance criteria (in `ai-context/`) are the contract;
