@@ -59,17 +59,40 @@ func TestPostgresExpiration(t *testing.T) {
 	pm := pgext.NewProxyManager(pool, pgext.WithTTL(1*time.Second))
 	cfg := core.NewConfig(core.NewBandwidth(10).RefillGreedy(1, time.Hour))
 
-	ok, err := pm.Bucket("exp", cfg).TryConsume(ctx, 4)
+	b, err := pm.Bucket("exp", cfg)
+	require.NoError(t, err)
+
+	ok, err := b.TryConsume(ctx, 4)
 	require.NoError(t, err)
 	require.True(t, ok)
 
 	time.Sleep(1200 * time.Millisecond)
 
-	av, err := pm.Bucket("exp", cfg).AvailableTokens(ctx)
+	av, err := b.AvailableTokens(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, int64(10), av, "expired state -> fresh full bucket")
 
 	n, err := pgext.NewStore(pool, pgext.WithTTL(1*time.Second)).RemoveExpired(ctx, 100)
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, n, int64(1), "at least the expired row is swept")
+}
+
+// Keys are TEXT. A table left over from an earlier BIGINT-keyed build survives
+// CREATE TABLE IF NOT EXISTS untouched, so EnsureSchema must report it instead of
+// letting every later query fail with an opaque type error.
+func TestEnsureSchemaRejectsLegacyBigintTable(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+
+	_, err := pool.Exec(ctx,
+		`CREATE TABLE legacy_bucket (id BIGINT PRIMARY KEY, state BYTEA, expires_at BIGINT)`)
+	require.NoError(t, err)
+
+	err = pgext.EnsureSchema(ctx, pool, pgext.WithTable("legacy_bucket"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "want text")
+
+	// A fresh table name still goes through cleanly, and is idempotent.
+	require.NoError(t, pgext.EnsureSchema(ctx, pool, pgext.WithTable("fresh_bucket")))
+	require.NoError(t, pgext.EnsureSchema(ctx, pool, pgext.WithTable("fresh_bucket")))
 }

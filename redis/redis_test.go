@@ -49,17 +49,20 @@ func TestRedisExpiration(t *testing.T) {
 	pm := redisext.NewProxyManager(rdb, redisext.WithTTL(1*time.Second))
 	cfg := core.NewConfig(core.NewBandwidth(10).RefillGreedy(1, time.Hour))
 
-	ok, err := pm.Bucket("exp", cfg).TryConsume(ctx, 4)
+	b, err := pm.Bucket("exp", cfg)
+	require.NoError(t, err)
+
+	ok, err := b.TryConsume(ctx, 4)
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	av, err := pm.Bucket("exp", cfg).AvailableTokens(ctx)
+	av, err := b.AvailableTokens(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, int64(6), av)
 
 	time.Sleep(1500 * time.Millisecond)
 
-	av, err = pm.Bucket("exp", cfg).AvailableTokens(ctx)
+	av, err = b.AvailableTokens(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, int64(10), av, "state expired -> fresh full bucket")
 }

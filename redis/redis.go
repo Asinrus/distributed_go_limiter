@@ -6,6 +6,8 @@ package redisext
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/asinrus/distributed_go_limiter/core"
@@ -43,11 +45,11 @@ func (s *redisStore) key(k string) string { return s.prefix + k }
 
 func (s *redisStore) GetState(ctx context.Context, key string) ([]byte, bool, error) {
 	val, err := s.rdb.Get(ctx, s.key(key)).Bytes()
-	if err == redis.Nil {
+	if errors.Is(err, redis.Nil) {
 		return nil, false, nil
 	}
 	if err != nil {
-		return nil, false, err
+		return nil, false, fmt.Errorf("redisext: get %q: %w", key, err)
 	}
 	return val, true, nil
 }
@@ -56,23 +58,36 @@ func (s *redisStore) CompareAndSwap(ctx context.Context, key string, old, newSta
 	k := s.key(key)
 	if old == nil {
 		// Create only if absent (Redis rejects nil values, so this can't be a CAS).
-		return s.rdb.SetNX(ctx, k, newState, ttl).Result()
+		ok, err := s.rdb.SetNX(ctx, k, newState, ttl).Result()
+		if err != nil {
+			return false, fmt.Errorf("redisext: setnx %q: %w", key, err)
+		}
+		return ok, nil
+	}
+	// Sub-millisecond TTLs would truncate to 0, which Redis rejects ("invalid
+	// expire time"); round up to the smallest representable PX value instead.
+	pttl := ttl.Milliseconds()
+	if ttl > 0 && pttl == 0 {
+		pttl = 1
 	}
 	var res int64
 	var err error
-	if ttl > 0 {
-		res, err = casScriptPX.Run(ctx, s.rdb, []string{k}, old, newState, ttl.Milliseconds()).Int64()
+	if pttl > 0 {
+		res, err = casScriptPX.Run(ctx, s.rdb, []string{k}, old, newState, pttl).Int64()
 	} else {
 		res, err = casScript.Run(ctx, s.rdb, []string{k}, old, newState).Int64()
 	}
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("redisext: cas %q: %w", key, err)
 	}
 	return res == 1, nil
 }
 
 func (s *redisStore) Remove(ctx context.Context, key string) error {
-	return s.rdb.Del(ctx, s.key(key)).Err()
+	if err := s.rdb.Del(ctx, s.key(key)).Err(); err != nil {
+		return fmt.Errorf("redisext: remove %q: %w", key, err)
+	}
+	return nil
 }
 
 // Option configures the Redis ProxyManager.

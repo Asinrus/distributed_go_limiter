@@ -55,9 +55,14 @@ func NewLockProxyManager(store LockStore, opts ...ProxyOption) *ProxyManager {
 }
 
 // Bucket returns a Bucket for key with the given configuration. Nodes sharing a
-// key must use matching configs (config is not stored in v1).
-func (pm *ProxyManager) Bucket(key string, cfg Config) Bucket {
-	return &proxyBucket{pm: pm, key: key, cfg: cfg}
+// key must use matching configs (config is not stored in v1). It returns
+// ErrInvalidConfig if cfg has no positive capacity or no refill rate — validating
+// here means every Bucket that exists is usable, so no operation has to re-check.
+func (pm *ProxyManager) Bucket(key string, cfg Config) (Bucket, error) {
+	if !cfg.valid() {
+		return nil, ErrInvalidConfig
+	}
+	return &proxyBucket{pm: pm, key: key, cfg: cfg}, nil
 }
 
 // Remove deletes a bucket's stored state. Removing a missing key is a no-op.

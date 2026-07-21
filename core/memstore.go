@@ -87,6 +87,5 @@ var _ CASStore = (*MemStore)(nil)
 // test clock. Handy for tests and for running the distributed API without a container.
 func NewInMemoryProxyManager(opts ...ProxyOption) *ProxyManager {
 	c := newProxyConfig(opts...)
-	store := newMemStoreClock(c.now)
-	return &ProxyManager{run: casRunner{store: store, ttl: c.ttl}, now: c.now}
+	return NewCASProxyManager(newMemStoreClock(c.now), opts...)
 }

@@ -13,7 +13,8 @@ var (
 	// ErrTokensExceedCapacity is returned by blocking Consume when the request can
 	// never be satisfied because it exceeds the bucket capacity.
 	ErrTokensExceedCapacity = errors.New("core: tokens to consume exceed bucket capacity")
-	// ErrInvalidConfig is returned when a Config/Bandwidth is not usable.
+	// ErrInvalidConfig is returned by NewLocalBucket / ProxyManager.Bucket when a
+	// Config is not usable (non-positive capacity, or no refill rate set).
 	ErrInvalidConfig = errors.New("core: invalid bucket configuration")
 )
 
@@ -21,7 +22,9 @@ var (
 // in-memory bucket and by every distributed backend (Redis, Postgres) — swapping
 // the provider never changes calling code. Distributed implementations use ctx
 // (cancellation/deadline) and may return I/O errors; the local implementation
-// ignores ctx and never errors.
+// ignores ctx and never returns I/O errors. Configuration is validated once at
+// construction, so the only error either can return for a bad argument is
+// ErrNonPositiveTokens.
 type Bucket interface {
 	// TryConsume takes n tokens if available, reporting whether it succeeded.
 	TryConsume(ctx context.Context, n int64) (bool, error)

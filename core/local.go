@@ -17,9 +17,14 @@ type LocalBucket struct {
 	now   func() int64
 }
 
-// NewLocalBucket builds an in-memory bucket from cfg.
-func NewLocalBucket(cfg Config) *LocalBucket {
-	return newLocalBucketClock(cfg, monotonicNanos)
+// NewLocalBucket builds an in-memory bucket from cfg. It returns ErrInvalidConfig
+// if cfg has no positive capacity or no refill rate — validating here means every
+// *LocalBucket that exists is usable, so no operation has to re-check.
+func NewLocalBucket(cfg Config) (*LocalBucket, error) {
+	if !cfg.valid() {
+		return nil, ErrInvalidConfig
+	}
+	return newLocalBucketClock(cfg, monotonicNanos), nil
 }
 
 // newLocalBucketClock is NewLocalBucket with an injectable clock (tests).

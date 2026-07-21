@@ -18,17 +18,20 @@ func TestAC45_InMemoryExpiration(t *testing.T) {
 	cfg := NewConfig(NewBandwidth(10).RefillGreedy(1, time.Hour))
 	key := "expiring"
 
-	ok, err := pm.Bucket(key, cfg).TryConsume(ctx, 4)
+	b, err := pm.Bucket(key, cfg) // stateless proxy — state lives in the store
+	require.NoError(t, err)
+
+	ok, err := b.TryConsume(ctx, 4)
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	av, err := pm.Bucket(key, cfg).AvailableTokens(ctx)
+	av, err := b.AvailableTokens(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, int64(6), av, "state persisted before TTL")
 
 	clk.advance(11 * time.Minute)
 
-	av, err = pm.Bucket(key, cfg).AvailableTokens(ctx)
+	av, err = b.AvailableTokens(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, int64(10), av, "state expired -> fresh full bucket")
 }

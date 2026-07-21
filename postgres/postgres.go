@@ -8,7 +8,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"hash/fnv"
 	"time"
 
 	"github.com/asinrus/distributed_go_limiter/core"
@@ -74,33 +73,24 @@ func newStore(pool *pgxpool.Pool, c config) *Store {
 	}
 }
 
-// keyToID maps a string key to the BIGINT primary key (FNV-64a). v1 supports
-// BIGINT-keyed tables; VARCHAR keys are a possible future option (see QUESTIONS).
-func keyToID(key string) int64 {
-	h := fnv.New64a()
-	_, _ = h.Write([]byte(key))
-	return int64(h.Sum64())
-}
-
 const maxLockRetries = 16
 
 func (s *Store) Do(ctx context.Context, key string, ttl time.Duration,
 	fn func(old []byte, found bool) ([]byte, bool, error)) error {
-	id := keyToID(key)
 	for i := 0; i < maxLockRetries; i++ {
-		done, err := s.doOnce(ctx, id, ttl, fn)
+		done, err := s.doOnce(ctx, key, ttl, fn)
 		if err != nil {
-			return err
+			return fmt.Errorf("pgext: do %q: %w", key, err)
 		}
 		if done {
 			return nil
 		}
 		// placeholder row was inserted; retry so it can be locked
 	}
-	return errors.New("pgext: exceeded retries acquiring row lock")
+	return fmt.Errorf("pgext: %q: exceeded retries acquiring row lock", key)
 }
 
-func (s *Store) doOnce(ctx context.Context, id int64, ttl time.Duration,
+func (s *Store) doOnce(ctx context.Context, key string, ttl time.Duration,
 	fn func(old []byte, found bool) ([]byte, bool, error)) (done bool, err error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -115,10 +105,10 @@ func (s *Store) doOnce(ctx context.Context, id int64, ttl time.Duration,
 
 	var state []byte
 	var expiresAt *int64
-	scanErr := tx.QueryRow(ctx, s.selectSQL, id).Scan(&state, &expiresAt)
+	scanErr := tx.QueryRow(ctx, s.selectSQL, key).Scan(&state, &expiresAt)
 	if errors.Is(scanErr, pgx.ErrNoRows) {
 		// Row doesn't exist yet — insert a placeholder we can lock next round.
-		if _, err = tx.Exec(ctx, s.insertSQL, id); err != nil {
+		if _, err = tx.Exec(ctx, s.insertSQL, key); err != nil {
 			return false, err
 		}
 		if err = tx.Commit(ctx); err != nil {
@@ -148,7 +138,7 @@ func (s *Store) doOnce(ctx context.Context, id int64, ttl time.Duration,
 			e := s.now() + ttl.Nanoseconds()
 			exp = &e
 		}
-		if _, err = tx.Exec(ctx, s.updateSQL, newState, exp, id); err != nil {
+		if _, err = tx.Exec(ctx, s.updateSQL, newState, exp, key); err != nil {
 			return false, err
 		}
 	}
@@ -160,8 +150,10 @@ func (s *Store) doOnce(ctx context.Context, id int64, ttl time.Duration,
 }
 
 func (s *Store) Remove(ctx context.Context, key string) error {
-	_, err := s.pool.Exec(ctx, s.deleteSQL, keyToID(key))
-	return err
+	if _, err := s.pool.Exec(ctx, s.deleteSQL, key); err != nil {
+		return fmt.Errorf("pgext: remove %q: %w", key, err)
+	}
+	return nil
 }
 
 // RemoveExpired deletes up to batch expired rows and returns how many were removed.
@@ -173,19 +165,43 @@ func (s *Store) RemoveExpired(ctx context.Context, batch int) (int64, error) {
 		s.cfg.table, s.cfg.idCol)
 	tag, err := s.pool.Exec(ctx, q, s.now(), batch)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("pgext: remove expired: %w", err)
 	}
 	return tag.RowsAffected(), nil
 }
 
-// EnsureSchema creates the bucket table if it does not exist.
+// EnsureSchema creates the bucket table (and its expiry index) if they do not
+// exist. It does NOT migrate an existing table: keys are TEXT, and a table left
+// over from an earlier BIGINT-keyed build is reported as an error rather than
+// silently surviving CREATE TABLE IF NOT EXISTS and failing on every query.
 func EnsureSchema(ctx context.Context, pool *pgxpool.Pool, opts ...Option) error {
 	c := newConfig(opts...)
+
+	const colTypeQ = `SELECT data_type FROM information_schema.columns
+	                  WHERE table_name = $1 AND column_name = $2`
+	var dt string
+	switch err := pool.QueryRow(ctx, colTypeQ, c.table, c.idCol).Scan(&dt); {
+	case errors.Is(err, pgx.ErrNoRows): // table doesn't exist yet — nothing to clash with
+	case err != nil:
+		return fmt.Errorf("pgext: inspect %s.%s: %w", c.table, c.idCol, err)
+	case dt != "text":
+		return fmt.Errorf("pgext: %s.%s is %s, want text; drop and recreate the table",
+			c.table, c.idCol, dt)
+	}
+
 	ddl := fmt.Sprintf(
-		`CREATE TABLE IF NOT EXISTS %s (%s BIGINT PRIMARY KEY, %s BYTEA, expires_at BIGINT)`,
+		`CREATE TABLE IF NOT EXISTS %[1]s (%[2]s TEXT PRIMARY KEY, %[3]s BYTEA, expires_at BIGINT)`,
 		c.table, c.idCol, c.stateCol)
-	_, err := pool.Exec(ctx, ddl)
-	return err
+	if _, err := pool.Exec(ctx, ddl); err != nil {
+		return fmt.Errorf("pgext: ensure schema: %w", err)
+	}
+	idx := fmt.Sprintf(
+		`CREATE INDEX IF NOT EXISTS %[1]s_expires_at_idx ON %[1]s (expires_at) WHERE expires_at IS NOT NULL`,
+		c.table)
+	if _, err := pool.Exec(ctx, idx); err != nil {
+		return fmt.Errorf("pgext: ensure schema index: %w", err)
+	}
+	return nil
 }
 
 // NewStore returns the raw LockStore (useful for RemoveExpired). Most callers want

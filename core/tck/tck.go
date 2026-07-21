@@ -42,8 +42,8 @@ func Run(t *testing.T, factory func() *core.ProxyManager) {
 func testKeyIsolation(t *testing.T, pm *core.ProxyManager) {
 	ctx := context.Background()
 	cfg := slowConfig(10)
-	b1 := pm.Bucket(newKey(), cfg)
-	b2 := pm.Bucket(newKey(), cfg)
+	b1 := mustBucket(t, pm, newKey(), cfg)
+	b2 := mustBucket(t, pm, newKey(), cfg)
 
 	for i := 0; i < 10; i++ {
 		ok, err := b1.TryConsume(ctx, 1)
@@ -80,7 +80,11 @@ func testConsistency(t *testing.T, pm *core.ProxyManager) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			b := pm.Bucket(key, cfg) // each "node" builds its own proxy
+			b, err := pm.Bucket(key, cfg) // each "node" builds its own proxy
+			if err != nil {
+				errOnce.Do(func() { firstErr = err })
+				return
+			}
 			for i := 0; i < each; i++ {
 				ok, err := b.TryConsume(ctx, 1)
 				if err != nil {
@@ -100,7 +104,7 @@ func testConsistency(t *testing.T, pm *core.ProxyManager) {
 	if got := success.Load(); got != workers*each {
 		t.Fatalf("expected all %d consumes to succeed (< capacity), got %d", workers*each, got)
 	}
-	av, err := pm.Bucket(key, cfg).AvailableTokens(ctx)
+	av, err := mustBucket(t, pm, key, cfg).AvailableTokens(ctx)
 	mustNoErr(t, err)
 	if want := int64(capacity - workers*each); av != want {
 		t.Fatalf("available=%d want %d (no lost/double updates)", av, want)
@@ -122,7 +126,11 @@ func testAtomicInit(t *testing.T, pm *core.ProxyManager) {
 		go func() {
 			defer wg.Done()
 			<-start
-			if ok, err := pm.Bucket(key, cfg).TryConsume(ctx, 1); err == nil && ok {
+			b, err := pm.Bucket(key, cfg)
+			if err != nil {
+				return // counted as a failure by the success total below
+			}
+			if ok, err := b.TryConsume(ctx, 1); err == nil && ok {
 				success.Add(1)
 			}
 		}()
@@ -133,7 +141,7 @@ func testAtomicInit(t *testing.T, pm *core.ProxyManager) {
 	if success.Load() != parallel {
 		t.Fatalf("expected %d successful consumes, got %d", parallel, success.Load())
 	}
-	av, err := pm.Bucket(key, cfg).AvailableTokens(ctx)
+	av, err := mustBucket(t, pm, key, cfg).AvailableTokens(ctx)
 	mustNoErr(t, err)
 	if want := int64(capacity - parallel); av != want {
 		t.Fatalf("available=%d want %d after atomic init", av, want)
@@ -145,7 +153,7 @@ func testRemoval(t *testing.T, pm *core.ProxyManager) {
 	ctx := context.Background()
 	cfg := slowConfig(10)
 	key := newKey()
-	b := pm.Bucket(key, cfg)
+	b := mustBucket(t, pm, key, cfg)
 
 	for i := 0; i < 5; i++ {
 		ok, err := b.TryConsume(ctx, 1)
@@ -157,7 +165,7 @@ func testRemoval(t *testing.T, pm *core.ProxyManager) {
 	if err := pm.Remove(ctx, key); err != nil {
 		t.Fatalf("remove: %v", err)
 	}
-	av, err := pm.Bucket(key, cfg).AvailableTokens(ctx)
+	av, err := mustBucket(t, pm, key, cfg).AvailableTokens(ctx)
 	mustNoErr(t, err)
 	if av != 10 {
 		t.Fatalf("after remove, available=%d want fresh 10", av)
@@ -167,10 +175,20 @@ func testRemoval(t *testing.T, pm *core.ProxyManager) {
 	}
 }
 
-func mustNoErr(t *testing.T, err error) bool {
+func mustNoErr(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	return true
+}
+
+// mustBucket builds a bucket or fails the test. Test-goroutine only — t.Fatalf
+// from a spawned goroutine is illegal, so the concurrent cases build inline.
+func mustBucket(t *testing.T, pm *core.ProxyManager, key string, cfg core.Config) core.Bucket {
+	t.Helper()
+	b, err := pm.Bucket(key, cfg)
+	if err != nil {
+		t.Fatalf("bucket %q: %v", key, err)
+	}
+	return b
 }

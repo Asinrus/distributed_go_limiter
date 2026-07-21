@@ -100,6 +100,25 @@ func TestAC17_DelayNanosForConsume(t *testing.T) {
 	assert.Equal(t, int64(math.MaxInt64), s.delayNanosForConsume(101, 0))
 }
 
+// AC-17 (wait calc, intervally): delay to consume n only lands on whole-period
+// boundaries — a fractional wait still rounds up to the next boundary.
+func TestAC17_DelayNanosForConsumeIntervally(t *testing.T) {
+	bw := NewBandwidth(100).RefillIntervally(10, time.Second).WithInitialTokens(0)
+	s := newState(bw, 0)
+
+	// Within one refill's worth: wait for the very next boundary.
+	assert.Equal(t, sec, s.delayNanosForConsume(5, 0))
+	// A "now" partway through the period shortens the wait accordingly.
+	assert.Equal(t, 7*sec/10, s.delayNanosForConsume(5, 3*sec/10))
+	// More than one refill's worth but less than two: one extra whole period.
+	assert.Equal(t, 2*sec, s.delayNanosForConsume(15, 0))
+	// Several periods needed, rounded up to a whole boundary count.
+	assert.Equal(t, 3*sec, s.delayNanosForConsume(25, 0))
+	assert.Equal(t, 3*sec, s.delayNanosForConsume(30, 0))
+	// n beyond capacity can never be satisfied.
+	assert.Equal(t, int64(math.MaxInt64), s.delayNanosForConsume(101, 0))
+}
+
 // AC-14/17: fullRefillNanos is the time to top up to capacity.
 func TestFullRefillNanos(t *testing.T) {
 	s := newState(NewBandwidth(100).RefillGreedy(10, time.Second).WithInitialTokens(0), 0)
