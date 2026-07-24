@@ -66,9 +66,13 @@ defect-vs-spec-gap) → triggers Dev (code fix) or Architect (spec/design fix) �
 loop until AC pass. Architect records outcome here.
 
 ## Open questions (tracked in QUESTIONS_TO_ARCHITECT.md)
-- Postgres key type: BIGINT only, or also VARCHAR? (leaning: support both via mapper)
-- TTL/expire-after-write in v1 or defer? (leaning: include, cheap for Redis)
-- Ship in-memory ProxyManager or test-only? (leaning: ship — useful + reference impl)
+- Q1–Q4 answered — TEXT keys (no mapper, rejected the BIGINT/VARCHAR split),
+  TTL shipped on both backends, in-memory ProxyManager shipped and exported,
+  LocalBucket stays mutex-based (measured against atomic.Pointer CAS).
+- Q5 (open): Postgres table/column names reach SQL via `fmt.Sprintf`, unescaped.
+  Low priority under the current threat model (app-supplied, not end-user input).
+- Q6 (open): Postgres leaks a permanent placeholder row for any key that is only
+  ever read (`AvailableTokens`/`EstimateAbilityToConsume`), never written.
 
 ## Changelog
 - _init_: phases defined; investigation complete; architect docs started.
