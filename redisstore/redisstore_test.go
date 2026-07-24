@@ -1,4 +1,4 @@
-package redisext_test
+package redisstore_test
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 
 	"github.com/asinrus/distributed_go_limiter/core"
 	"github.com/asinrus/distributed_go_limiter/core/tck"
-	redisext "github.com/asinrus/distributed_go_limiter/redis"
+	"github.com/asinrus/distributed_go_limiter/redisstore"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -38,7 +38,7 @@ func startRedis(t *testing.T) *redis.Client {
 func TestRedisConformance(t *testing.T) {
 	rdb := startRedis(t)
 	tck.Run(t, func() *core.ProxyManager {
-		return redisext.NewProxyManager(rdb)
+		return redisstore.NewProxyManager(rdb)
 	})
 }
 
@@ -46,7 +46,7 @@ func TestRedisConformance(t *testing.T) {
 func TestRedisExpiration(t *testing.T) {
 	rdb := startRedis(t)
 	ctx := context.Background()
-	pm := redisext.NewProxyManager(rdb, redisext.WithTTL(1*time.Second))
+	pm := redisstore.NewProxyManager(rdb, redisstore.WithTTL(1*time.Second))
 	cfg := core.NewConfig(core.NewBandwidth(10).RefillGreedy(1, time.Hour))
 
 	b, err := pm.Bucket("exp", cfg)

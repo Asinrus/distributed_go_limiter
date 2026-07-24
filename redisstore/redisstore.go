@@ -1,8 +1,8 @@
-// Package redisext is the Redis storage backend for the distributed rate limiter.
+// Package redisstore is the Redis storage backend for the distributed rate limiter.
 // It implements core.CASStore using compare-and-swap: the token math runs in core
 // (client-side), Redis only provides atomic get / conditional-set. See
 // docs/internal/project/EXT_REDIS.md.
-package redisext
+package redisstore
 
 import (
 	"context"
@@ -34,33 +34,33 @@ else
 end`)
 )
 
-type redisStore struct {
+type store struct {
 	rdb    redis.Cmdable
 	prefix string
 }
 
-var _ core.CASStore = (*redisStore)(nil)
+var _ core.CASStore = (*store)(nil)
 
-func (s *redisStore) key(k string) string { return s.prefix + k }
+func (s *store) key(k string) string { return s.prefix + k }
 
-func (s *redisStore) GetState(ctx context.Context, key string) ([]byte, bool, error) {
+func (s *store) GetState(ctx context.Context, key string) ([]byte, bool, error) {
 	val, err := s.rdb.Get(ctx, s.key(key)).Bytes()
 	if errors.Is(err, redis.Nil) {
 		return nil, false, nil
 	}
 	if err != nil {
-		return nil, false, fmt.Errorf("redisext: get %q: %w", key, err)
+		return nil, false, fmt.Errorf("redisstore: get %q: %w", key, err)
 	}
 	return val, true, nil
 }
 
-func (s *redisStore) CompareAndSwap(ctx context.Context, key string, old, newState []byte, ttl time.Duration) (bool, error) {
+func (s *store) CompareAndSwap(ctx context.Context, key string, old, newState []byte, ttl time.Duration) (bool, error) {
 	k := s.key(key)
 	if old == nil {
 		// Create only if absent (Redis rejects nil values, so this can't be a CAS).
 		ok, err := s.rdb.SetNX(ctx, k, newState, ttl).Result()
 		if err != nil {
-			return false, fmt.Errorf("redisext: setnx %q: %w", key, err)
+			return false, fmt.Errorf("redisstore: setnx %q: %w", key, err)
 		}
 		return ok, nil
 	}
@@ -78,14 +78,14 @@ func (s *redisStore) CompareAndSwap(ctx context.Context, key string, old, newSta
 		res, err = casScript.Run(ctx, s.rdb, []string{k}, old, newState).Int64()
 	}
 	if err != nil {
-		return false, fmt.Errorf("redisext: cas %q: %w", key, err)
+		return false, fmt.Errorf("redisstore: cas %q: %w", key, err)
 	}
 	return res == 1, nil
 }
 
-func (s *redisStore) Remove(ctx context.Context, key string) error {
+func (s *store) Remove(ctx context.Context, key string) error {
 	if err := s.rdb.Del(ctx, s.key(key)).Err(); err != nil {
-		return fmt.Errorf("redisext: remove %q: %w", key, err)
+		return fmt.Errorf("redisstore: remove %q: %w", key, err)
 	}
 	return nil
 }
@@ -112,6 +112,6 @@ func NewProxyManager(rdb redis.Cmdable, opts ...Option) *core.ProxyManager {
 	for _, o := range opts {
 		o(&c)
 	}
-	store := &redisStore{rdb: rdb, prefix: c.prefix}
-	return core.NewCASProxyManager(store, core.WithExpireAfterWrite(c.ttl))
+	s := &store{rdb: rdb, prefix: c.prefix}
+	return core.NewCASProxyManager(s, core.WithExpireAfterWrite(c.ttl))
 }

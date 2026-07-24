@@ -17,16 +17,16 @@ func handle(ctx context.Context, b core.Bucket) {
 cfg := core.NewConfig(core.NewBandwidth(50).RefillGreedy(10, time.Second))
 
 // The config is validated once, here — every bucket that exists is usable.
-b, err := core.NewLocalBucket(cfg)                             // in-memory
-// b, err := redisext.NewProxyManager(rdb).Bucket("user:42", cfg)  // Redis
-// b, err := pgext.NewProxyManager(pool).Bucket("user:42", cfg)    // Postgres
+b, err := core.NewLocalBucket(cfg)                                // in-memory
+// b, err := redisstore.NewProxyManager(rdb).Bucket("user:42", cfg)  // Redis
+// b, err := pgstore.NewProxyManager(pool).Bucket("user:42", cfg)    // Postgres
 ```
 
 ## Modules
 - `core/` — API + token-bucket algorithm, zero external runtime deps.
-- `redis/` — Redis backend (compare-and-swap via Lua).
-- `postgres/` — Postgres backend (SELECT … FOR UPDATE).
-- `examples/` — a Gin API wired to each backend, with docker-compose files
+- `redisstore/` (package `redisstore`) — Redis backend (compare-and-swap via Lua).
+- `pgstore/` (package `pgstore`) — Postgres backend (SELECT … FOR UPDATE).
+- `examples/` — a minimal `net/http` server per backend, with docker-compose files
   (`cd examples/redis && docker compose up -d && go run .`).
 
 ## Docs
@@ -40,9 +40,9 @@ v1: single bandwidth per bucket, blocking consume, three backends. See `ai-conte
 ## Test
 The repo root is a `go.work` workspace (not a module), so build/test per module:
 ```
-cd core && go test -race ./...   # algorithm + local + in-memory TCK (no container)
-cd redis && go test ./...        # testcontainers Redis
-cd postgres && go test ./...     # testcontainers Postgres
+cd core && go test -race ./...       # algorithm + local + in-memory TCK (no container)
+cd redisstore && go test ./...       # testcontainers Redis
+cd pgstore && go test ./...          # testcontainers Postgres
 ```
 The Redis/Postgres tests need a reachable Docker-compatible runtime. For podman:
 ```

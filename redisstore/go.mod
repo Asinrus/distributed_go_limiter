@@ -1,4 +1,4 @@
-module github.com/asinrus/distributed_go_limiter/redis
+module github.com/asinrus/distributed_go_limiter/redisstore
 
 go 1.23.0
 

@@ -1,4 +1,4 @@
-package pgext_test
+package pgstore_test
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 
 	"github.com/asinrus/distributed_go_limiter/core"
 	"github.com/asinrus/distributed_go_limiter/core/tck"
-	pgext "github.com/asinrus/distributed_go_limiter/postgres"
+	"github.com/asinrus/distributed_go_limiter/pgstore"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -40,7 +40,7 @@ func startPostgres(t *testing.T) *pgxpool.Pool {
 	t.Cleanup(pool.Close)
 
 	require.NoError(t, pool.Ping(ctx))
-	require.NoError(t, pgext.EnsureSchema(ctx, pool))
+	require.NoError(t, pgstore.EnsureSchema(ctx, pool))
 	return pool
 }
 
@@ -48,7 +48,7 @@ func startPostgres(t *testing.T) *pgxpool.Pool {
 func TestPostgresConformance(t *testing.T) {
 	pool := startPostgres(t)
 	tck.Run(t, func() *core.ProxyManager {
-		return pgext.NewProxyManager(pool)
+		return pgstore.NewProxyManager(pool)
 	})
 }
 
@@ -56,7 +56,7 @@ func TestPostgresConformance(t *testing.T) {
 func TestPostgresExpiration(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
-	pm := pgext.NewProxyManager(pool, pgext.WithTTL(1*time.Second))
+	pm := pgstore.NewProxyManager(pool, pgstore.WithTTL(1*time.Second))
 	cfg := core.NewConfig(core.NewBandwidth(10).RefillGreedy(1, time.Hour))
 
 	b, err := pm.Bucket("exp", cfg)
@@ -72,7 +72,7 @@ func TestPostgresExpiration(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(10), av, "expired state -> fresh full bucket")
 
-	n, err := pgext.NewStore(pool, pgext.WithTTL(1*time.Second)).RemoveExpired(ctx, 100)
+	n, err := pgstore.NewStore(pool, pgstore.WithTTL(1*time.Second)).RemoveExpired(ctx, 100)
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, n, int64(1), "at least the expired row is swept")
 }
@@ -88,11 +88,11 @@ func TestEnsureSchemaRejectsLegacyBigintTable(t *testing.T) {
 		`CREATE TABLE legacy_bucket (id BIGINT PRIMARY KEY, state BYTEA, expires_at BIGINT)`)
 	require.NoError(t, err)
 
-	err = pgext.EnsureSchema(ctx, pool, pgext.WithTable("legacy_bucket"))
+	err = pgstore.EnsureSchema(ctx, pool, pgstore.WithTable("legacy_bucket"))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "want text")
 
 	// A fresh table name still goes through cleanly, and is idempotent.
-	require.NoError(t, pgext.EnsureSchema(ctx, pool, pgext.WithTable("fresh_bucket")))
-	require.NoError(t, pgext.EnsureSchema(ctx, pool, pgext.WithTable("fresh_bucket")))
+	require.NoError(t, pgstore.EnsureSchema(ctx, pool, pgstore.WithTable("fresh_bucket")))
+	require.NoError(t, pgstore.EnsureSchema(ctx, pool, pgstore.WithTable("fresh_bucket")))
 }

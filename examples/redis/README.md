@@ -2,38 +2,37 @@
 
 ```bash
 docker compose up -d
-go run .            # PORT=8081 go run . for a second replica
+go run .                     # PORT=8081 go run . for a second, concurrent replica
 docker compose down
 ```
 
 Override the address with `REDIS_ADDR` (default `localhost:6379`, matching
 [docker-compose.yml](docker-compose.yml)).
 
-## What is Redis-specific here
+## What [main.go](main.go) actually does
 
-Everything is in [main.go](main.go); the API in `../api` is untouched.
+```go
+rdb := redis.NewClient(&redis.Options{Addr: addr})
+pm := redisstore.NewProxyManager(rdb, redisstore.WithTTL(time.Hour))
+```
 
-**Timeouts are not optional.** Every rate-limit check sits between your user and
-your handler, so a slow Redis adds its latency to every request. `ReadTimeout` /
-`WriteTimeout` of 500ms mean the limiter fails fast and takes the
-fail-open/fail-closed branch instead of hanging.
+That's the entire Redis-specific part. Everything after it — `pm.Bucket(key,
+cfg)`, `b.TryConsume(ctx, 1)` — is the same `core.ProxyManager` API the Postgres
+example uses, and the same one `core.NewInMemoryProxyManager()` gives you with no
+container at all.
 
-**`WithTTL` is the entire cleanup story.** Redis expires keys itself, so unlike
-Postgres there is no sweeper to run. Any TTL comfortably longer than a bucket's
-refill time is safe: a bucket that idle has refilled to full anyway, so dropping
-it changes nothing.
+**`WithTTL` is the whole cleanup story.** Redis expires the key itself, so unlike
+Postgres there is nothing to sweep. Any TTL comfortably longer than a bucket's
+refill time is safe — a bucket that idle has already refilled to full, so
+dropping it changes nothing.
 
 ```console
-$ redis-cli TTL ratelimit:search:key:alice
+$ redis-cli TTL '127.0.0.1'
 3600
 ```
 
-**`WithKeyPrefix`** namespaces every key. Worth setting even on a dedicated
-instance — it makes limiter keys obvious in `redis-cli` and lets one Redis serve
-several apps or environments.
-
 **Cluster and Sentinel work unchanged**, because the backend takes a
-`redis.Cmdable`:
+`redis.Cmdable`, not a concrete client type:
 
 ```go
 rdb := redis.NewClusterClient(&redis.ClusterOptions{Addrs: []string{...}})
@@ -46,18 +45,17 @@ cross-slot errors, no hash tags needed.
 ## What is in the compose file, and why
 
 **No persistence** (`--save "" --appendonly no`). Rate-limit state is disposable:
-if Redis restarts empty every client just gets a fresh allowance, which is a safe
+if Redis restarts empty, every client just gets a fresh allowance — a safe
 failure. Skip the fsync cost. Turn RDB back on only if you would rather limits
 survive a restart than have faster writes.
 
 **`--maxmemory-policy volatile-ttl`** bounds what a flood of distinct keys can
-take. It evicts the soonest-to-expire key first and only ever touches keys that
-*have* a TTL — which is why the app must set `WithTTL`. Without TTLs this policy
-has nothing to evict and writes fail with OOM.
+take. It evicts the soonest-to-expire key first and only touches keys that
+*have* a TTL — which is why the app sets `WithTTL`. Without TTLs this policy has
+nothing to evict and writes fail with OOM instead.
 
 Eviction hands the evicted client a fresh allowance, so size `maxmemory` so it
-does not happen routinely: roughly 100 bytes per bucket, one bucket per
-(scope, client).
+does not happen routinely: roughly 100 bytes per bucket, one bucket per client.
 
 ## How the state looks
 
@@ -66,8 +64,8 @@ does not happen routinely: roughly 100 bytes per bucket, one bucket per
 (a Lua script) and `SET NX`.
 
 ```console
-$ redis-cli KEYS 'ratelimit:*'
-ratelimit:search:key:alice
-$ redis-cli STRLEN ratelimit:search:key:alice
+$ redis-cli KEYS '*'
+127.0.0.1
+$ redis-cli STRLEN '127.0.0.1'
 25
 ```

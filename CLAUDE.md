@@ -39,15 +39,14 @@ Root is a `go.work` workspace, **not** a module — build/test per module.
   - `memstore.go` — in-memory `CASStore` + `NewInMemoryProxyManager` (reference impl).
   - `tck/` — shared conformance suite (stdlib `testing` only, no deps). Every backend
     runs the SAME suite; this is how provider-swap (AC-46) is proven.
-- `redis/` (package `redisext`) — `CASStore` via Lua compare-and-swap + `SET NX`.
-- `postgres/` (package `pgext`) — `LockStore` via `SELECT … FOR UPDATE`.
-- `examples/` — a Gin API wired to each backend. `examples/api/` is the shared
-  HTTP layer (router + rate-limit middleware) and must stay **provider-agnostic**;
-  `examples/redis/` and `examples/postgres/` are `main` packages that differ only
-  in how they build the `*core.ProxyManager`, each with a `docker-compose.yml`.
-  If a change forces a provider-specific branch into `api/`, the swap goal has
-  regressed. Needs Go 1.25 (gin), hence the `go.work` floor; the three library
-  modules stay on 1.23.
+- `redisstore/` (package `redisstore`) — `CASStore` via Lua compare-and-swap + `SET NX`.
+- `pgstore/` (package `pgstore`) — `LockStore` via `SELECT … FOR UPDATE`.
+- `examples/` — two minimal `main` packages, `examples/redis/` and
+  `examples/postgres/`, each with a `docker-compose.yml`. Each is a plain
+  `net/http` server whose only backend-specific line is the `*core.ProxyManager`
+  constructor; everything after that (`pm.Bucket`, `TryConsume`) is identical.
+  Deliberately un-abstracted — no shared package between them — so the library
+  call is never one hop away from `main()`.
 
 ## Conventions
 - **TDD, tests first.** The acceptance criteria (in `ai-context/`) are the contract;
@@ -64,8 +63,8 @@ Root is a `go.work` workspace, **not** a module — build/test per module.
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH" GOTOOLCHAIN=local   # Go is userspace, no system install
 cd core && go test -race ./...        # algorithm + local + blocking + in-memory TCK (no container)
-cd ../redis && go test ./...          # testcontainers Redis
-cd ../postgres && go test ./...       # testcontainers Postgres
+cd ../redisstore && go test ./...     # testcontainers Redis
+cd ../pgstore && go test ./...        # testcontainers Postgres
 ```
 - Build **per module** (`cd core && go build ./...`), not `go build ./...` from root.
 - Do NOT set `GOFLAGS=-mod=mod` inside the workspace (it errors).

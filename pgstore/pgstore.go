@@ -1,8 +1,8 @@
-// Package pgext is the Postgres storage backend for the distributed rate limiter.
+// Package pgstore is the Postgres storage backend for the distributed rate limiter.
 // It implements core.LockStore using SELECT ... FOR UPDATE: the row lock is held
 // across the read-modify-write, so concurrent updaters serialize with no CAS loop.
 // The token math runs in core. See docs/internal/project/EXT_POSTGRES.md.
-package pgext
+package pgstore
 
 import (
 	"context"
@@ -80,14 +80,14 @@ func (s *Store) Do(ctx context.Context, key string, ttl time.Duration,
 	for i := 0; i < maxLockRetries; i++ {
 		done, err := s.doOnce(ctx, key, ttl, fn)
 		if err != nil {
-			return fmt.Errorf("pgext: do %q: %w", key, err)
+			return fmt.Errorf("pgstore: do %q: %w", key, err)
 		}
 		if done {
 			return nil
 		}
 		// placeholder row was inserted; retry so it can be locked
 	}
-	return fmt.Errorf("pgext: %q: exceeded retries acquiring row lock", key)
+	return fmt.Errorf("pgstore: %q: exceeded retries acquiring row lock", key)
 }
 
 func (s *Store) doOnce(ctx context.Context, key string, ttl time.Duration,
@@ -151,7 +151,7 @@ func (s *Store) doOnce(ctx context.Context, key string, ttl time.Duration,
 
 func (s *Store) Remove(ctx context.Context, key string) error {
 	if _, err := s.pool.Exec(ctx, s.deleteSQL, key); err != nil {
-		return fmt.Errorf("pgext: remove %q: %w", key, err)
+		return fmt.Errorf("pgstore: remove %q: %w", key, err)
 	}
 	return nil
 }
@@ -165,7 +165,7 @@ func (s *Store) RemoveExpired(ctx context.Context, batch int) (int64, error) {
 		s.cfg.table, s.cfg.idCol)
 	tag, err := s.pool.Exec(ctx, q, s.now(), batch)
 	if err != nil {
-		return 0, fmt.Errorf("pgext: remove expired: %w", err)
+		return 0, fmt.Errorf("pgstore: remove expired: %w", err)
 	}
 	return tag.RowsAffected(), nil
 }
@@ -183,9 +183,9 @@ func EnsureSchema(ctx context.Context, pool *pgxpool.Pool, opts ...Option) error
 	switch err := pool.QueryRow(ctx, colTypeQ, c.table, c.idCol).Scan(&dt); {
 	case errors.Is(err, pgx.ErrNoRows): // table doesn't exist yet — nothing to clash with
 	case err != nil:
-		return fmt.Errorf("pgext: inspect %s.%s: %w", c.table, c.idCol, err)
+		return fmt.Errorf("pgstore: inspect %s.%s: %w", c.table, c.idCol, err)
 	case dt != "text":
-		return fmt.Errorf("pgext: %s.%s is %s, want text; drop and recreate the table",
+		return fmt.Errorf("pgstore: %s.%s is %s, want text; drop and recreate the table",
 			c.table, c.idCol, dt)
 	}
 
@@ -193,13 +193,13 @@ func EnsureSchema(ctx context.Context, pool *pgxpool.Pool, opts ...Option) error
 		`CREATE TABLE IF NOT EXISTS %[1]s (%[2]s TEXT PRIMARY KEY, %[3]s BYTEA, expires_at BIGINT)`,
 		c.table, c.idCol, c.stateCol)
 	if _, err := pool.Exec(ctx, ddl); err != nil {
-		return fmt.Errorf("pgext: ensure schema: %w", err)
+		return fmt.Errorf("pgstore: ensure schema: %w", err)
 	}
 	idx := fmt.Sprintf(
 		`CREATE INDEX IF NOT EXISTS %[1]s_expires_at_idx ON %[1]s (expires_at) WHERE expires_at IS NOT NULL`,
 		c.table)
 	if _, err := pool.Exec(ctx, idx); err != nil {
-		return fmt.Errorf("pgext: ensure schema index: %w", err)
+		return fmt.Errorf("pgstore: ensure schema index: %w", err)
 	}
 	return nil
 }
