@@ -9,8 +9,22 @@ import (
 // serialization. It implements the same Bucket interface as the distributed
 // backends, so code written against Bucket runs unchanged on either.
 //
-// ponytail: a plain sync.Mutex around three int64s; if profiling ever shows
-// contention, switch to an atomic.Pointer[bucketState] CAS loop (see QUESTIONS Q4).
+// ponytail: a plain sync.Mutex around three int64s. The atomic.Pointer[bucketState]
+// CAS loop this note used to recommend has since been built and measured — see
+// lockfree_bench_test.go, which also proves it correct under -race. Verdict: keep
+// the mutex.
+//
+// Lock-free is 1.2–1.5x SLOWER on accepted consumes, because publishing a new
+// state costs a 64-byte allocation, and contention adds ~0.8 wasted retries per
+// op on top. It wins only where nothing is published: rejections (5x) and
+// AvailableTokens (7.5x at 8 cores, and it scales where the mutex degrades).
+// Accepted consumes are the hot path — traffic under the limit is the normal
+// state of a rate limiter — so the mutex wins the case that matters.
+//
+// If this ever does need to be faster, the clock is the target, not the lock:
+// of a 54ns TryConsume, monotonicNanos is 29ns, the token maths 10ns, and the
+// mutex only ~15ns. Perfect zero-cost locking would buy 28%; a coarser cached
+// clock would buy more.
 type LocalBucket struct {
 	mu    sync.Mutex
 	state *bucketState
