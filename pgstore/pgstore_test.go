@@ -77,6 +77,73 @@ func TestPostgresExpiration(t *testing.T) {
 	assert.GreaterOrEqual(t, n, int64(1), "at least the expired row is swept")
 }
 
+// Table/column names reach SQL by interpolation, not by bind parameter. They are
+// application config rather than end-user input, but a hostile identifier must be
+// escaped, never executed — and every interpolating statement must agree on the
+// escaping, including the derived index name and the information_schema guard.
+// No acceptance criterion covers SQL identifier safety (see open question Q5).
+func TestHostileIdentifiersAreEscapedNotExecuted(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+
+	_, err := pool.Exec(ctx, `CREATE TABLE sentinel (x INT)`)
+	require.NoError(t, err)
+
+	// Every identifier closes the quote and appends a second statement.
+	var (
+		table = `b"; DROP TABLE sentinel; --`
+		idCol = `i"d`
+		stCol = `st"ate`
+		opts  = []pgstore.Option{
+			pgstore.WithTable(table),
+			pgstore.WithIDColumn(idCol),
+			pgstore.WithStateColumn(stCol),
+		}
+	)
+
+	require.NoError(t, pgstore.EnsureSchema(ctx, pool, opts...))
+	require.NoError(t, pgstore.EnsureSchema(ctx, pool, opts...), "idempotent")
+
+	// The full read-modify-write path (select/insert/update) uses those identifiers.
+	pm := pgstore.NewProxyManager(pool, append(opts, pgstore.WithTTL(time.Hour))...)
+	b, err := pm.Bucket("k", core.NewConfig(core.NewBandwidth(2).RefillGreedy(1, time.Hour)))
+	require.NoError(t, err)
+	ok, err := b.TryConsume(ctx, 1)
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	av, err := b.AvailableTokens(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), av)
+
+	// RemoveExpired and Remove interpolate too.
+	store := pgstore.NewStore(pool, opts...)
+	_, err = store.RemoveExpired(ctx, 10)
+	require.NoError(t, err)
+	require.NoError(t, store.Remove(ctx, "k"))
+
+	// Nothing detonated: the injected statement never ran, and the table really is
+	// the one whose name contains a quote.
+	var n int
+	require.NoError(t, pool.QueryRow(ctx, `SELECT count(*) FROM sentinel`).Scan(&n))
+	assert.Equal(t, 0, n)
+
+	var exists bool
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM information_schema.columns
+		                WHERE table_name = $1 AND column_name = $2)`,
+		table, idCol).Scan(&exists))
+	assert.True(t, exists, "quoted identifiers are stored verbatim")
+
+	// The BIGINT guard must still fire for a quoted name: it looks the column up in
+	// information_schema, which only matches if DDL and lookup normalize the same way.
+	_, err = pool.Exec(ctx, `CREATE TABLE "Legacy" ("Id" BIGINT PRIMARY KEY, state BYTEA, expires_at BIGINT)`)
+	require.NoError(t, err)
+	err = pgstore.EnsureSchema(ctx, pool, pgstore.WithTable("Legacy"), pgstore.WithIDColumn("Id"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "want text")
+}
+
 // Keys are TEXT. A table left over from an earlier BIGINT-keyed build survives
 // CREATE TABLE IF NOT EXISTS untouched, so EnsureSchema must report it instead of
 // letting every later query fail with an opaque type error.

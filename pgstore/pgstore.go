@@ -59,8 +59,15 @@ type Store struct {
 
 var _ core.LockStore = (*Store)(nil)
 
+// quote renders a configured name as a single SQL identifier: double-quoted, with
+// embedded quotes escaped. Identifiers cannot be bind parameters, so this is the only
+// thing standing between WithTable/WithIDColumn/WithStateColumn and the SQL parser.
+// Quoting also makes the name case-sensitive and exact, which is what lets the
+// information_schema lookup in EnsureSchema compare against the raw value.
+func quote(name string) string { return pgx.Identifier{name}.Sanitize() }
+
 func newStore(pool *pgxpool.Pool, c config) *Store {
-	t, id, st := c.table, c.idCol, c.stateCol
+	t, id, st := quote(c.table), quote(c.idCol), quote(c.stateCol)
 	return &Store{
 		pool: pool,
 		cfg:  c,
@@ -162,7 +169,7 @@ func (s *Store) RemoveExpired(ctx context.Context, batch int) (int64, error) {
 		`DELETE FROM %[1]s WHERE %[2]s IN (
             SELECT %[2]s FROM %[1]s WHERE expires_at IS NOT NULL AND expires_at <= $1
             ORDER BY %[2]s FOR UPDATE SKIP LOCKED LIMIT $2)`,
-		s.cfg.table, s.cfg.idCol)
+		quote(s.cfg.table), quote(s.cfg.idCol))
 	tag, err := s.pool.Exec(ctx, q, s.now(), batch)
 	if err != nil {
 		return 0, fmt.Errorf("pgstore: remove expired: %w", err)
@@ -177,6 +184,10 @@ func (s *Store) RemoveExpired(ctx context.Context, batch int) (int64, error) {
 func EnsureSchema(ctx context.Context, pool *pgxpool.Pool, opts ...Option) error {
 	c := newConfig(opts...)
 
+	// Compared against the raw names, not the quoted ones: the DDL below quotes every
+	// identifier, so what lands in the catalog is the configured string verbatim. Keep
+	// the two in step — dropping the quoting would reintroduce Postgres's fold-to-
+	// lowercase and this guard would stop matching for any non-lowercase name.
 	const colTypeQ = `SELECT data_type FROM information_schema.columns
 	                  WHERE table_name = $1 AND column_name = $2`
 	var dt string
@@ -191,13 +202,15 @@ func EnsureSchema(ctx context.Context, pool *pgxpool.Pool, opts ...Option) error
 
 	ddl := fmt.Sprintf(
 		`CREATE TABLE IF NOT EXISTS %[1]s (%[2]s TEXT PRIMARY KEY, %[3]s BYTEA, expires_at BIGINT)`,
-		c.table, c.idCol, c.stateCol)
+		quote(c.table), quote(c.idCol), quote(c.stateCol))
 	if _, err := pool.Exec(ctx, ddl); err != nil {
 		return fmt.Errorf("pgstore: ensure schema: %w", err)
 	}
+	// The index name is derived, so it is one identifier built from the table name —
+	// quote the concatenation, not the parts.
 	idx := fmt.Sprintf(
-		`CREATE INDEX IF NOT EXISTS %[1]s_expires_at_idx ON %[1]s (expires_at) WHERE expires_at IS NOT NULL`,
-		c.table)
+		`CREATE INDEX IF NOT EXISTS %[1]s ON %[2]s (expires_at) WHERE expires_at IS NOT NULL`,
+		quote(c.table+"_expires_at_idx"), quote(c.table))
 	if _, err := pool.Exec(ctx, idx); err != nil {
 		return fmt.Errorf("pgstore: ensure schema index: %w", err)
 	}
