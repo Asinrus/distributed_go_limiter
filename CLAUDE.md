@@ -60,6 +60,8 @@ Root is a `go.work` workspace, **not** a module — build/test per module.
   (shared across nodes). Both injectable via `WithClock` for tests.
 
 ## Build & test
+`/verify` runs this whole suite (all three modules, podman env already set) and routes
+failures to the investigator — the block below is what it does, and the fallback.
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH" GOTOOLCHAIN=local   # Go is userspace, no system install
 cd core && go test -race ./...        # algorithm + local + blocking + in-memory TCK (no container)

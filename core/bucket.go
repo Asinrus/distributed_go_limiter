@@ -16,6 +16,13 @@ var (
 	// ErrInvalidConfig is returned by NewLocalBucket / ProxyManager.Bucket when a
 	// Config is not usable (non-positive capacity, or no refill rate set).
 	ErrInvalidConfig = errors.New("core: invalid bucket configuration")
+	// ErrStore reports that the backing store failed — I/O error, timeout,
+	// cancellation, or unavailability. Every error crossing the store boundary
+	// wraps it, and the backend's own error stays reachable via errors.Is/As. core
+	// is protocol-agnostic and does not decide fail-open vs fail-closed: check
+	// errors.Is(err, ErrStore) and pick how to degrade. Distributed buckets only;
+	// LocalBucket never returns it.
+	ErrStore = errors.New("core: store failure")
 )
 
 // Bucket is the rate-limiter API. The SAME interface is implemented by the local
