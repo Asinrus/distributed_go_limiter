@@ -44,7 +44,7 @@ func startPostgres(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
-// AC-41..46 on real Postgres — the same suite the in-memory and Redis backends run.
+// AC-41..44 on real Postgres — the same suite the in-memory and Redis backends run.
 func TestPostgresConformance(t *testing.T) {
 	pool := startPostgres(t)
 	tck.Run(t, func() *core.ProxyManager {
@@ -142,6 +142,36 @@ func TestHostileIdentifiersAreEscapedNotExecuted(t *testing.T) {
 	err = pgstore.EnsureSchema(ctx, pool, pgstore.WithTable("Legacy"), pgstore.WithIDColumn("Id"))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "want text")
+}
+
+// SchemaSQL is the migration path for users who own their own DDL: running its
+// statements by hand must produce exactly the table EnsureSchema would have made,
+// and identifiers must be quoted there too.
+func TestSchemaSQLIsAppliableByHand(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+
+	opts := []pgstore.Option{pgstore.WithTable("Manual"), pgstore.WithIDColumn("Key")}
+	stmts := pgstore.SchemaSQL(opts...)
+	require.Len(t, stmts, 2)
+	assert.Contains(t, stmts[0], `"Manual"`, "identifiers are quoted, not folded")
+	assert.Contains(t, stmts[0], `"Key" TEXT PRIMARY KEY`)
+
+	for _, s := range stmts {
+		_, err := pool.Exec(ctx, s)
+		require.NoError(t, err)
+	}
+
+	// EnsureSchema accepts the hand-applied table (its TEXT guard passes), and the
+	// store works against it end to end.
+	require.NoError(t, pgstore.EnsureSchema(ctx, pool, opts...))
+
+	pm := pgstore.NewProxyManager(pool, opts...)
+	b, err := pm.Bucket("k", core.NewConfig(core.NewBandwidth(2).RefillGreedy(1, time.Hour)))
+	require.NoError(t, err)
+	ok, err := b.TryConsume(ctx, 1)
+	require.NoError(t, err)
+	require.True(t, ok)
 }
 
 // Keys are TEXT. A table left over from an earlier BIGINT-keyed build survives

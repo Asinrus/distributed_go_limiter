@@ -34,7 +34,7 @@ func startRedis(t *testing.T) *redis.Client {
 	return rdb
 }
 
-// AC-41..46 on real Redis — the same suite the in-memory and Postgres backends run.
+// AC-41..44 on real Redis — the same suite the in-memory and Postgres backends run.
 func TestRedisConformance(t *testing.T) {
 	rdb := startRedis(t)
 	tck.Run(t, func() *core.ProxyManager {

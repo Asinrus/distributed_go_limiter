@@ -1,7 +1,7 @@
 // Package pgstore is the Postgres storage backend for the distributed rate limiter.
 // It implements core.LockStore using SELECT ... FOR UPDATE: the row lock is held
 // across the read-modify-write, so concurrent updaters serialize with no CAS loop.
-// The token math runs in core. See docs/internal/project/EXT_POSTGRES.md.
+// The token math runs in core. See docs/client/postgres.md.
 package pgstore
 
 import (
@@ -49,6 +49,8 @@ func newConfig(opts ...Option) config {
 	return c
 }
 
+// Store is the Postgres core.LockStore. Obtain one with NewStore; most callers
+// want NewProxyManager instead.
 type Store struct {
 	pool *pgxpool.Pool
 	cfg  config
@@ -177,14 +179,32 @@ func (s *Store) RemoveExpired(ctx context.Context, batch int) (int64, error) {
 	return tag.RowsAffected(), nil
 }
 
-// EnsureSchema creates the bucket table (and its expiry index) if they do not
-// exist. It does NOT migrate an existing table: keys are TEXT, and a table left
-// over from an earlier BIGINT-keyed build is reported as an error rather than
+// SchemaSQL returns the DDL statements for the bucket table and its expiry index,
+// in the order they must run, for callers who apply migrations with their own
+// tooling (goose, Flyway, atlas, a hand-written .sql file) instead of EnsureSchema.
+// Pass the same Options the Store is built with, or the names will not match.
+func SchemaSQL(opts ...Option) []string {
+	c := newConfig(opts...)
+	return []string{
+		fmt.Sprintf(
+			`CREATE TABLE IF NOT EXISTS %[1]s (%[2]s TEXT PRIMARY KEY, %[3]s BYTEA, expires_at BIGINT)`,
+			quote(c.table), quote(c.idCol), quote(c.stateCol)),
+		// The index name is derived, so it is one identifier built from the table name —
+		// quote the concatenation, not the parts.
+		fmt.Sprintf(
+			`CREATE INDEX IF NOT EXISTS %[1]s ON %[2]s (expires_at) WHERE expires_at IS NOT NULL`,
+			quote(c.table+"_expires_at_idx"), quote(c.table)),
+	}
+}
+
+// EnsureSchema applies SchemaSQL against pool, so a program can create its own
+// table on boot. It does NOT migrate an existing table: keys are TEXT, and a table
+// left over from an earlier BIGINT-keyed build is reported as an error rather than
 // silently surviving CREATE TABLE IF NOT EXISTS and failing on every query.
 func EnsureSchema(ctx context.Context, pool *pgxpool.Pool, opts ...Option) error {
 	c := newConfig(opts...)
 
-	// Compared against the raw names, not the quoted ones: the DDL below quotes every
+	// Compared against the raw names, not the quoted ones: the DDL quotes every
 	// identifier, so what lands in the catalog is the configured string verbatim. Keep
 	// the two in step — dropping the quoting would reintroduce Postgres's fold-to-
 	// lowercase and this guard would stop matching for any non-lowercase name.
@@ -200,19 +220,10 @@ func EnsureSchema(ctx context.Context, pool *pgxpool.Pool, opts ...Option) error
 			c.table, c.idCol, dt)
 	}
 
-	ddl := fmt.Sprintf(
-		`CREATE TABLE IF NOT EXISTS %[1]s (%[2]s TEXT PRIMARY KEY, %[3]s BYTEA, expires_at BIGINT)`,
-		quote(c.table), quote(c.idCol), quote(c.stateCol))
-	if _, err := pool.Exec(ctx, ddl); err != nil {
-		return fmt.Errorf("pgstore: ensure schema: %w", err)
-	}
-	// The index name is derived, so it is one identifier built from the table name —
-	// quote the concatenation, not the parts.
-	idx := fmt.Sprintf(
-		`CREATE INDEX IF NOT EXISTS %[1]s ON %[2]s (expires_at) WHERE expires_at IS NOT NULL`,
-		quote(c.table+"_expires_at_idx"), quote(c.table))
-	if _, err := pool.Exec(ctx, idx); err != nil {
-		return fmt.Errorf("pgstore: ensure schema index: %w", err)
+	for _, stmt := range SchemaSQL(opts...) {
+		if _, err := pool.Exec(ctx, stmt); err != nil {
+			return fmt.Errorf("pgstore: ensure schema: %w", err)
+		}
 	}
 	return nil
 }

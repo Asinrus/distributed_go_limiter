@@ -22,14 +22,41 @@ b, err := core.NewLocalBucket(cfg)                                // in-memory
 // b, err := pgstore.NewProxyManager(pool).Bucket("user:42", cfg)    // Postgres
 ```
 
+## One budget across every replica
+
+That is the property an in-process limiter cannot give you. Two independent processes,
+one shared bucket of 5:
+
+```console
+$ cd examples/redis && docker compose up -d
+$ PORT=8080 go run . &  PORT=8081 go run . &
+$ for p in 8080 8081 8080 8081 8080 8081; do
+    curl -s -o /dev/null -w "$p -> %{http_code}\n" localhost:$p/
+  done
+8080 -> 200
+8081 -> 200
+8080 -> 200
+8081 -> 200
+8080 -> 200
+8081 -> 429      <-- 6th request over the limit, whichever process gets it
+```
+
+With `golang.org/x/time/rate`, or a `map[string]*rate.Limiter` held in-process, each
+replica keeps its own count and doubling the replicas silently doubles the real limit.
+
 ## Modules
-- `core/` — API + token-bucket algorithm, zero external runtime deps.
-- `redisstore/` (package `redisstore`) — Redis backend (compare-and-swap via Lua).
-- `pgstore/` (package `pgstore`) — Postgres backend (SELECT … FOR UPDATE).
-- `examples/` — a minimal `net/http` server per backend, with docker-compose files
+- `core/` — API + token-bucket algorithm, zero external runtime deps, no transport
+  dependency (no `net/http`, no gRPC — an adapter belongs in your code).
+- `redisstore/` — Redis backend (compare-and-swap via Lua).
+- `pgstore/` — Postgres backend (SELECT … FOR UPDATE).
+- `examples/` — a `net/http` server per backend, with docker-compose files
   (`cd examples/redis && docker compose up -d && go run .`).
 
 ## Docs
+- [`docs/client/redis.md`](docs/client/redis.md) — TTL and cleanup, Cluster/Sentinel,
+  server configuration, what is stored.
+- [`docs/client/postgres.md`](docs/client/postgres.md) — schema and how to apply it with
+  your own migration tool, sweeping expired rows, server configuration.
 - `ai-context/` — process, roles, and progress (`ai-context/PLANS.md` tracker).
 - `CLAUDE.md` — code map + build/test commands.
 - Detailed design & investigation notes are kept local under `docs/internal/` (untracked).
