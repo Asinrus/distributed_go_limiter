@@ -9,15 +9,9 @@ services:
       - "5432:5432"
     command:
       - postgres
-      # Every rate-limit check is a short transaction holding one row lock, so
-      # the workload is many tiny transactions rather than few large ones. Give
-      # it connection headroom to match the app's pool (MaxConns in main.go),
-      # plus room for the sweeper and your own psql session.
       - -c
       - max_connections=100
-      # Nothing here is worth recovering: the demo table is rebuilt by
-      # EnsureSchema on boot. Trading durability for write throughput is fine
-      # for a local example — do NOT copy this line to a shared database.
+      # Local example only — do NOT copy to a shared database.
       - -c
       - fsync=off
       - -c

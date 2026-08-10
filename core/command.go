@@ -23,13 +23,12 @@ func storeErr(err error) error {
 
 const maxCASRetries = 100
 
-// bucketOp mutates a bucketState and reports whether it changed (so read-only /
-// rejected ops skip the write). The same op body runs on every provider — this is
-// the analog of bucket4j's RemoteCommand.
+// bucketOp mutates a bucketState and reports whether it changed, so read-only and
+// rejected ops skip the write. The same op body runs on every provider.
 type bucketOp func(s *bucketState) (modified bool)
 
-// runner executes a bucketOp against a provider's state for a key. Two impls:
-// casRunner (optimistic retry) and lockRunner (exclusive lock).
+// runner executes a bucketOp against a provider's state for a key: casRunner
+// (optimistic retry) or lockRunner (exclusive lock).
 type runner interface {
 	execute(ctx context.Context, key string, cfg Config, now int64, op bucketOp) error
 	remove(ctx context.Context, key string) error

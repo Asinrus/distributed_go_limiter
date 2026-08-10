@@ -5,9 +5,8 @@ import (
 	"time"
 )
 
-// A storage provider implements exactly one of CASStore or LockStore. The core
-// command executor drives it; the token math is never in the store. See
-// docs/internal/project/ARCHITECTURE.md.
+// A storage provider implements exactly one of CASStore or LockStore. The token
+// math never runs in the store; the core command executor drives it.
 
 // CASStore is the optimistic (compare-and-swap) provider contract — Redis and the
 // in-memory store. State is an opaque byte blob keyed by string.

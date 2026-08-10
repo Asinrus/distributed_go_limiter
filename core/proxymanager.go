@@ -5,10 +5,9 @@ import (
 	"time"
 )
 
-// ProxyManager builds distributed Buckets backed by a storage provider. The SAME
-// concrete type is used by every backend — Redis, Postgres, in-memory — because
-// only the Store differs. Swapping providers changes one constructor line; the
-// Bucket API and all calling code stay identical (the primary design goal).
+// ProxyManager builds distributed Buckets backed by a storage provider. Every
+// backend uses this same concrete type — only the Store differs — so swapping
+// providers changes one constructor line and nothing else.
 type ProxyManager struct {
 	run runner
 	now func() int64
