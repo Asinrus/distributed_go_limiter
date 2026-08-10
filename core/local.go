@@ -9,10 +9,11 @@ import (
 // Bucket interface as the distributed backends, so code written against Bucket
 // runs unchanged on either.
 //
-// ponytail: sync.Mutex, not an atomic.Pointer CAS loop — measured, and lock-free
-// is 1.2–1.5x slower on accepted consumes (the hot path) because publishing a new
-// state allocates. If this ever needs to be faster the clock is the target, not
-// the lock: monotonicNanos is 29ns of a 54ns TryConsume, the mutex only ~15ns.
+// The mutex is deliberate rather than an atomic.Pointer CAS loop: benchmarked,
+// the lock-free variant is 1.2–1.5x slower on accepted consumes — the hot path —
+// because publishing a new state allocates. Should this need to be faster, the
+// clock is the better target: monotonicNanos accounts for 29ns of a 54ns
+// TryConsume, the mutex for roughly 15ns.
 type LocalBucket struct {
 	mu    sync.Mutex
 	state *bucketState

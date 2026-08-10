@@ -58,8 +58,9 @@ Root is a `go.work` workspace, **not** a module — build/test per module.
   each criterion has a stable ID (AC-11 … AC-46) referenced from the test name
   (`TestAC12_...`). The shared `core/tck` suite is their executable form.
 - **Comments earn their place.** Godoc on every exported symbol, plus comments that
-  explain a *why* the code cannot. No restating the code, no tutorial narrative, no
-  war stories. Deliberate shortcuts get a `ponytail:` line naming the ceiling.
+  explain a *why* the code cannot. No restating the code, no tutorial narrative.
+  A deliberate trade-off gets a comment naming its limit and what would justify
+  revisiting it.
 - **v1 = single bandwidth per bucket.** Deferred: multi-bandwidth, async, verbose
   diagnostics, optimization/batching, config replacement + versioning, grid providers.
 - New distributed backend = implement `core.CASStore` **or** `core.LockStore`, then
