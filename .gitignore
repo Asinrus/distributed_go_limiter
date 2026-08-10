@@ -33,3 +33,7 @@ Thumbs.db
 # Local env overrides
 .env
 .env.local
+
+# Claude Code: agents/ and commands/ are committed (they encode the project's
+# process); per-machine permission grants are not.
+.claude/settings.local.json

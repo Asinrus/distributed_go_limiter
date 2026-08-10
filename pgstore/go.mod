@@ -1,4 +1,4 @@
-module github.com/asinrus/distributed_go_limiter/postgres
+module github.com/asinrus/distributed_go_limiter/pgstore
 
 go 1.23.0
 

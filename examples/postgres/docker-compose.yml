@@ -1,0 +1,23 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: limiter
+      POSTGRES_PASSWORD: limiter
+      POSTGRES_DB: limiter
+    ports:
+      - "5432:5432"
+    command:
+      - postgres
+      - -c
+      - max_connections=100
+      # Local example only — do NOT copy to a shared database.
+      - -c
+      - fsync=off
+      - -c
+      - synchronous_commit=off
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U limiter -d limiter"]
+      interval: 2s
+      timeout: 2s
+      retries: 15

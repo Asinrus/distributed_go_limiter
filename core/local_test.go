@@ -14,9 +14,9 @@ import (
 // fakeClock is a controllable monotonic clock for deterministic tests.
 type fakeClock struct{ ns atomic.Int64 }
 
-func (c *fakeClock) now() int64                 { return c.ns.Load() }
-func (c *fakeClock) advance(d time.Duration)    { c.ns.Add(int64(d)) }
-func newFakeClock() *fakeClock                  { return &fakeClock{} }
+func (c *fakeClock) now() int64              { return c.ns.Load() }
+func (c *fakeClock) advance(d time.Duration) { c.ns.Add(int64(d)) }
+func newFakeClock() *fakeClock               { return &fakeClock{} }
 
 func localWithClock(cfg Config, clk *fakeClock) *LocalBucket {
 	return newLocalBucketClock(cfg, clk.now)
@@ -39,6 +39,30 @@ func TestAC21_LocalTryConsume(t *testing.T) {
 
 	_, err = b.TryConsume(ctx, 0)
 	assert.ErrorIs(t, err, ErrNonPositiveTokens)
+}
+
+// An invalid config (no refill mode set, or non-positive capacity) is rejected at
+// construction, so an unusable bucket never exists to be called. A valid config
+// still builds.
+func TestInvalidConfig_LocalBucket(t *testing.T) {
+	t.Run("zero refill period", func(t *testing.T) {
+		_, err := NewLocalBucket(NewConfig(NewBandwidth(10))) // no RefillGreedy/RefillIntervally
+		assert.ErrorIs(t, err, ErrInvalidConfig)
+	})
+
+	// Rejecting at construction is what keeps this consistent: AsBlocking().Consume
+	// used to report ErrTokensExceedCapacity here (n > capacity 0) rather than
+	// ErrInvalidConfig, because it returns before reaching reserveTokens.
+	t.Run("non-positive capacity", func(t *testing.T) {
+		_, err := NewLocalBucket(NewConfig(NewBandwidth(0).RefillGreedy(1, time.Second)))
+		assert.ErrorIs(t, err, ErrInvalidConfig)
+	})
+
+	t.Run("valid config builds", func(t *testing.T) {
+		b, err := NewLocalBucket(NewConfig(NewBandwidth(10).RefillGreedy(1, time.Second)))
+		require.NoError(t, err)
+		require.NotNil(t, b)
+	})
 }
 
 // AC-22: under concurrency the bucket never over-grants (no data race with -race).

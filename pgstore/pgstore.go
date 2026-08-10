@@ -1,14 +1,13 @@
-// Package pgext is the Postgres storage backend for the distributed rate limiter.
+// Package pgstore is the Postgres storage backend for the distributed rate limiter.
 // It implements core.LockStore using SELECT ... FOR UPDATE: the row lock is held
 // across the read-modify-write, so concurrent updaters serialize with no CAS loop.
-// The token math runs in core. See docs/internal/project/EXT_POSTGRES.md.
-package pgext
+// The token math runs in core. See docs/client/postgres.md.
+package pgstore
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"hash/fnv"
 	"time"
 
 	"github.com/asinrus/distributed_go_limiter/core"
@@ -50,6 +49,8 @@ func newConfig(opts ...Option) config {
 	return c
 }
 
+// Store is the Postgres core.LockStore. Obtain one with NewStore; most callers
+// want NewProxyManager instead.
 type Store struct {
 	pool *pgxpool.Pool
 	cfg  config
@@ -60,8 +61,15 @@ type Store struct {
 
 var _ core.LockStore = (*Store)(nil)
 
+// quote renders a configured name as a single SQL identifier: double-quoted, with
+// embedded quotes escaped. Identifiers cannot be bind parameters, so this is the only
+// thing standing between WithTable/WithIDColumn/WithStateColumn and the SQL parser.
+// Quoting also makes the name case-sensitive and exact, which is what lets the
+// information_schema lookup in EnsureSchema compare against the raw value.
+func quote(name string) string { return pgx.Identifier{name}.Sanitize() }
+
 func newStore(pool *pgxpool.Pool, c config) *Store {
-	t, id, st := c.table, c.idCol, c.stateCol
+	t, id, st := quote(c.table), quote(c.idCol), quote(c.stateCol)
 	return &Store{
 		pool: pool,
 		cfg:  c,
@@ -74,33 +82,24 @@ func newStore(pool *pgxpool.Pool, c config) *Store {
 	}
 }
 
-// keyToID maps a string key to the BIGINT primary key (FNV-64a). v1 supports
-// BIGINT-keyed tables; VARCHAR keys are a possible future option (see QUESTIONS).
-func keyToID(key string) int64 {
-	h := fnv.New64a()
-	_, _ = h.Write([]byte(key))
-	return int64(h.Sum64())
-}
-
 const maxLockRetries = 16
 
 func (s *Store) Do(ctx context.Context, key string, ttl time.Duration,
 	fn func(old []byte, found bool) ([]byte, bool, error)) error {
-	id := keyToID(key)
 	for i := 0; i < maxLockRetries; i++ {
-		done, err := s.doOnce(ctx, id, ttl, fn)
+		done, err := s.doOnce(ctx, key, ttl, fn)
 		if err != nil {
-			return err
+			return fmt.Errorf("pgstore: do %q: %w", key, err)
 		}
 		if done {
 			return nil
 		}
 		// placeholder row was inserted; retry so it can be locked
 	}
-	return errors.New("pgext: exceeded retries acquiring row lock")
+	return fmt.Errorf("pgstore: %q: exceeded retries acquiring row lock", key)
 }
 
-func (s *Store) doOnce(ctx context.Context, id int64, ttl time.Duration,
+func (s *Store) doOnce(ctx context.Context, key string, ttl time.Duration,
 	fn func(old []byte, found bool) ([]byte, bool, error)) (done bool, err error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -115,10 +114,10 @@ func (s *Store) doOnce(ctx context.Context, id int64, ttl time.Duration,
 
 	var state []byte
 	var expiresAt *int64
-	scanErr := tx.QueryRow(ctx, s.selectSQL, id).Scan(&state, &expiresAt)
+	scanErr := tx.QueryRow(ctx, s.selectSQL, key).Scan(&state, &expiresAt)
 	if errors.Is(scanErr, pgx.ErrNoRows) {
 		// Row doesn't exist yet — insert a placeholder we can lock next round.
-		if _, err = tx.Exec(ctx, s.insertSQL, id); err != nil {
+		if _, err = tx.Exec(ctx, s.insertSQL, key); err != nil {
 			return false, err
 		}
 		if err = tx.Commit(ctx); err != nil {
@@ -148,7 +147,7 @@ func (s *Store) doOnce(ctx context.Context, id int64, ttl time.Duration,
 			e := s.now() + ttl.Nanoseconds()
 			exp = &e
 		}
-		if _, err = tx.Exec(ctx, s.updateSQL, newState, exp, id); err != nil {
+		if _, err = tx.Exec(ctx, s.updateSQL, newState, exp, key); err != nil {
 			return false, err
 		}
 	}
@@ -160,8 +159,10 @@ func (s *Store) doOnce(ctx context.Context, id int64, ttl time.Duration,
 }
 
 func (s *Store) Remove(ctx context.Context, key string) error {
-	_, err := s.pool.Exec(ctx, s.deleteSQL, keyToID(key))
-	return err
+	if _, err := s.pool.Exec(ctx, s.deleteSQL, key); err != nil {
+		return fmt.Errorf("pgstore: remove %q: %w", key, err)
+	}
+	return nil
 }
 
 // RemoveExpired deletes up to batch expired rows and returns how many were removed.
@@ -170,22 +171,61 @@ func (s *Store) RemoveExpired(ctx context.Context, batch int) (int64, error) {
 		`DELETE FROM %[1]s WHERE %[2]s IN (
             SELECT %[2]s FROM %[1]s WHERE expires_at IS NOT NULL AND expires_at <= $1
             ORDER BY %[2]s FOR UPDATE SKIP LOCKED LIMIT $2)`,
-		s.cfg.table, s.cfg.idCol)
+		quote(s.cfg.table), quote(s.cfg.idCol))
 	tag, err := s.pool.Exec(ctx, q, s.now(), batch)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("pgstore: remove expired: %w", err)
 	}
 	return tag.RowsAffected(), nil
 }
 
-// EnsureSchema creates the bucket table if it does not exist.
+// SchemaSQL returns the DDL statements for the bucket table and its expiry index,
+// in the order they must run, for callers who apply migrations with their own
+// tooling (goose, Flyway, atlas, a hand-written .sql file) instead of EnsureSchema.
+// Pass the same Options the Store is built with, or the names will not match.
+func SchemaSQL(opts ...Option) []string {
+	c := newConfig(opts...)
+	return []string{
+		fmt.Sprintf(
+			`CREATE TABLE IF NOT EXISTS %[1]s (%[2]s TEXT PRIMARY KEY, %[3]s BYTEA, expires_at BIGINT)`,
+			quote(c.table), quote(c.idCol), quote(c.stateCol)),
+		// The index name is derived, so it is one identifier built from the table name —
+		// quote the concatenation, not the parts.
+		fmt.Sprintf(
+			`CREATE INDEX IF NOT EXISTS %[1]s ON %[2]s (expires_at) WHERE expires_at IS NOT NULL`,
+			quote(c.table+"_expires_at_idx"), quote(c.table)),
+	}
+}
+
+// EnsureSchema applies SchemaSQL against pool, so a program can create its own
+// table on boot. It does NOT migrate an existing table: keys are TEXT, and a table
+// left over from an earlier BIGINT-keyed build is reported as an error rather than
+// silently surviving CREATE TABLE IF NOT EXISTS and failing on every query.
 func EnsureSchema(ctx context.Context, pool *pgxpool.Pool, opts ...Option) error {
 	c := newConfig(opts...)
-	ddl := fmt.Sprintf(
-		`CREATE TABLE IF NOT EXISTS %s (%s BIGINT PRIMARY KEY, %s BYTEA, expires_at BIGINT)`,
-		c.table, c.idCol, c.stateCol)
-	_, err := pool.Exec(ctx, ddl)
-	return err
+
+	// Compared against the raw names, not the quoted ones: the DDL quotes every
+	// identifier, so what lands in the catalog is the configured string verbatim. Keep
+	// the two in step — dropping the quoting would reintroduce Postgres's fold-to-
+	// lowercase and this guard would stop matching for any non-lowercase name.
+	const colTypeQ = `SELECT data_type FROM information_schema.columns
+	                  WHERE table_name = $1 AND column_name = $2`
+	var dt string
+	switch err := pool.QueryRow(ctx, colTypeQ, c.table, c.idCol).Scan(&dt); {
+	case errors.Is(err, pgx.ErrNoRows): // table doesn't exist yet — nothing to clash with
+	case err != nil:
+		return fmt.Errorf("pgstore: inspect %s.%s: %w", c.table, c.idCol, err)
+	case dt != "text":
+		return fmt.Errorf("pgstore: %s.%s is %s, want text; drop and recreate the table",
+			c.table, c.idCol, dt)
+	}
+
+	for _, stmt := range SchemaSQL(opts...) {
+		if _, err := pool.Exec(ctx, stmt); err != nil {
+			return fmt.Errorf("pgstore: ensure schema: %w", err)
+		}
+	}
+	return nil
 }
 
 // NewStore returns the raw LockStore (useful for RemoveExpired). Most callers want

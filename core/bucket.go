@@ -13,15 +13,22 @@ var (
 	// ErrTokensExceedCapacity is returned by blocking Consume when the request can
 	// never be satisfied because it exceeds the bucket capacity.
 	ErrTokensExceedCapacity = errors.New("core: tokens to consume exceed bucket capacity")
-	// ErrInvalidConfig is returned when a Config/Bandwidth is not usable.
+	// ErrInvalidConfig is returned by NewLocalBucket / ProxyManager.Bucket when a
+	// Config is not usable (non-positive capacity, or no refill rate set).
 	ErrInvalidConfig = errors.New("core: invalid bucket configuration")
+	// ErrStore reports that the backing store failed — I/O error, timeout,
+	// cancellation, or unavailability. Every error crossing the store boundary
+	// wraps it, and the backend's own error stays reachable via errors.Is/As.
+	// core does not decide fail-open vs fail-closed; the caller checks
+	// errors.Is(err, ErrStore). Distributed buckets only.
+	ErrStore = errors.New("core: store failure")
 )
 
-// Bucket is the rate-limiter API. The SAME interface is implemented by the local
-// in-memory bucket and by every distributed backend (Redis, Postgres) — swapping
-// the provider never changes calling code. Distributed implementations use ctx
-// (cancellation/deadline) and may return I/O errors; the local implementation
-// ignores ctx and never errors.
+// Bucket is the rate-limiter API, implemented identically by the local in-memory
+// bucket and by every distributed backend — swapping the provider never changes
+// calling code. Distributed implementations honour ctx and may return ErrStore;
+// the local one ignores ctx and never does. Config is validated at construction,
+// so the only argument error is ErrNonPositiveTokens.
 type Bucket interface {
 	// TryConsume takes n tokens if available, reporting whether it succeeded.
 	TryConsume(ctx context.Context, n int64) (bool, error)
@@ -46,11 +53,8 @@ type reserver interface {
 	capacity() int64
 }
 
-// --- time sources -----------------------------------------------------------
-//
-// Local buckets use a monotonic, process-local clock. Distributed buckets must
-// use a wall-clock epoch so timestamps written to shared state are comparable
-// across nodes. Both are injectable for tests.
+// Local buckets use a monotonic, process-local clock; distributed buckets must
+// use a wall-clock epoch so timestamps in shared state are comparable across nodes.
 
 var processStart = time.Now()
 

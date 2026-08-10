@@ -1,4 +1,4 @@
-package redisext_test
+package redisstore_test
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 
 	"github.com/asinrus/distributed_go_limiter/core"
 	"github.com/asinrus/distributed_go_limiter/core/tck"
-	redisext "github.com/asinrus/distributed_go_limiter/redis"
+	"github.com/asinrus/distributed_go_limiter/redisstore"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,11 +34,11 @@ func startRedis(t *testing.T) *redis.Client {
 	return rdb
 }
 
-// AC-41..46 on real Redis — the same suite the in-memory and Postgres backends run.
+// AC-41..44 on real Redis — the same suite the in-memory and Postgres backends run.
 func TestRedisConformance(t *testing.T) {
 	rdb := startRedis(t)
 	tck.Run(t, func() *core.ProxyManager {
-		return redisext.NewProxyManager(rdb)
+		return redisstore.NewProxyManager(rdb)
 	})
 }
 
@@ -46,20 +46,23 @@ func TestRedisConformance(t *testing.T) {
 func TestRedisExpiration(t *testing.T) {
 	rdb := startRedis(t)
 	ctx := context.Background()
-	pm := redisext.NewProxyManager(rdb, redisext.WithTTL(1*time.Second))
+	pm := redisstore.NewProxyManager(rdb, redisstore.WithTTL(1*time.Second))
 	cfg := core.NewConfig(core.NewBandwidth(10).RefillGreedy(1, time.Hour))
 
-	ok, err := pm.Bucket("exp", cfg).TryConsume(ctx, 4)
+	b, err := pm.Bucket("exp", cfg)
+	require.NoError(t, err)
+
+	ok, err := b.TryConsume(ctx, 4)
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	av, err := pm.Bucket("exp", cfg).AvailableTokens(ctx)
+	av, err := b.AvailableTokens(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, int64(6), av)
 
 	time.Sleep(1500 * time.Millisecond)
 
-	av, err = pm.Bucket("exp", cfg).AvailableTokens(ctx)
+	av, err = b.AvailableTokens(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, int64(10), av, "state expired -> fresh full bucket")
 }

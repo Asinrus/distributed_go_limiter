@@ -5,21 +5,29 @@ import (
 	"sync"
 )
 
-// LocalBucket is an in-memory Bucket guarded by a mutex — the hot path, no
-// serialization. It implements the same Bucket interface as the distributed
-// backends, so code written against Bucket runs unchanged on either.
+// LocalBucket is an in-memory Bucket guarded by a mutex. It implements the same
+// Bucket interface as the distributed backends, so code written against Bucket
+// runs unchanged on either.
 //
-// ponytail: a plain sync.Mutex around three int64s; if profiling ever shows
-// contention, switch to an atomic.Pointer[bucketState] CAS loop (see QUESTIONS Q4).
+// The mutex is deliberate rather than an atomic.Pointer CAS loop: benchmarked,
+// the lock-free variant is 1.2–1.5x slower on accepted consumes — the hot path —
+// because publishing a new state allocates. Should this need to be faster, the
+// clock is the better target: monotonicNanos accounts for 29ns of a 54ns
+// TryConsume, the mutex for roughly 15ns.
 type LocalBucket struct {
 	mu    sync.Mutex
 	state *bucketState
 	now   func() int64
 }
 
-// NewLocalBucket builds an in-memory bucket from cfg.
-func NewLocalBucket(cfg Config) *LocalBucket {
-	return newLocalBucketClock(cfg, monotonicNanos)
+// NewLocalBucket builds an in-memory bucket from cfg. It returns ErrInvalidConfig
+// if cfg has no positive capacity or no refill rate — validating here means every
+// *LocalBucket that exists is usable, so no operation has to re-check.
+func NewLocalBucket(cfg Config) (*LocalBucket, error) {
+	if !cfg.valid() {
+		return nil, ErrInvalidConfig
+	}
+	return newLocalBucketClock(cfg, monotonicNanos), nil
 }
 
 // newLocalBucketClock is NewLocalBucket with an injectable clock (tests).

@@ -13,26 +13,35 @@ tiny `Store`. **Primary goal: swap the provider without changing rate-limiting
 logic** — the same conformance suite (`core/tck`) passes against all three.
 
 ## What lives where
-| Path | Tracked | Contents |
-|------|---------|----------|
-| `ai-context/PLANS.md` | ✅ committed | Progress tracker (phases, status, decisions). **Architect-owned — only the architect edits it.** |
-| `ai-context/README.md` | ✅ committed | This guide. |
-| `docs/internal/project/` | ⛔ local | `ARCHITECTURE.md` (mermaid + provider-swap examples), `EXT_REDIS.md`, `EXT_POSTGRES.md`, `ACCEPTANCE_CRITERIA.md`, `QUESTIONS_TO_ARCHITECT.md`, `problem_reports/`. |
-| `docs/internal/bucket4j/` | ⛔ local | Investigation of the reference library (algorithm, backends, module/test layout, provider-swap abstraction). |
-| `CLAUDE.md` | ✅ committed | Code map + build/test commands. |
+| Path | Contents |
+|------|----------|
+| `ai-context/PLANS.md` | Progress tracker (phases, status, decisions). **Architect-owned — only the architect edits it.** |
+| `ai-context/README.md` | This guide. |
+| `docs/client/` | User-facing backend docs (`redis.md`, `postgres.md`). |
+| `docs/internal/project/` | `ARCHITECTURE.md` (mermaid + provider-swap examples), `EXT_REDIS.md`, `EXT_POSTGRES.md`, `ACCEPTANCE_CRITERIA.md`, `QUESTIONS_TO_ARCHITECT.md`, `problem_reports/`. |
+| `docs/internal/bucket4j/` | Investigation of the reference library (algorithm, backends, module/test layout, provider-swap abstraction). |
+| `.claude/agents/` | `architect.md`, `dev.md`, `investigator.md` — the roles below, in executable form. |
+| `.claude/commands/` | `/verify` — full suite across every workspace module; dispatches the investigator on failure. |
+| `CLAUDE.md` | Code map + build/test commands. **Dev-owned** — it follows the code, so Dev updates it; the Architect files a question in `QUESTIONS_TO_ARCHITECT.md` rather than editing it silently. |
 
 ## Roles & process
-- **Architect** — owns `PLANS.md` and `docs/internal/project/`. May dispatch an
-  **Investigator** (findings → `docs/internal/bucket4j/`) before finalizing a design decision.
-- **Dev** — implements TDD against the acceptance criteria
-  (`docs/internal/project/ACCEPTANCE_CRITERIA.md`). Every criterion has a stable ID
-  (AC-11 … AC-46) referenced from the test name (`TestAC12_...`); the shared TCK
-  (`core/tck`) is the executable form and runs against local + Redis + Postgres.
-- **Failure-handling loop** — on any verification failure (build error, failing
-  test, unmet criterion): the Investigator writes
-  `docs/internal/project/problem_reports/<phase>-<n>.md` (symptom, failing AC id,
-  root cause, defect-vs-spec-gap) and triggers Dev (code fix) or Architect
-  (spec/design fix). Loop until the criteria pass; Architect records the outcome in `PLANS.md`.
+The three roles are dispatchable subagents; **their agent files are the
+authoritative definition** — read those, not a paraphrase here.
+
+| Role | Definition | Owns |
+|------|-----------|------|
+| Architect | `.claude/agents/architect.md` | `ai-context/`, `docs/internal/project/` |
+| Dev | `.claude/agents/dev.md` | Go source, tests, `CLAUDE.md` |
+| Investigator | `.claude/agents/investigator.md` | `docs/internal/project/problem_reports/` |
+
+**Failure-handling loop** (the part no single agent file encodes) — on any
+verification failure (build error, failing test, unmet criterion): the
+Investigator writes `docs/internal/project/problem_reports/<phase>-<n>.md`
+(symptom, failing AC id, root cause, defect-vs-spec-gap) and that routing triggers
+Dev (code fix) or Architect (spec/design fix). Loop until the criteria pass;
+Architect records the outcome in `PLANS.md`. `/verify`
+(`.claude/commands/verify.md`) runs the suite and dispatches the Investigator on
+failure automatically, so the loop starts without anyone remembering to start it.
 
 ## Key decisions (v1)
 - **Single bandwidth per bucket.** Deferred: multi-bandwidth, async API, verbose
@@ -41,9 +50,13 @@ logic** — the same conformance suite (`core/tck`) passes against all three.
   surfaces I/O + cancellation) — calling code stays identical across backends.
 - Config is supplied at bucket-build time and **not stored**; nodes sharing a key
   must use matching config.
+- **`core` is protocol-agnostic.** No HTTP (or gRPC, or any transport) inside the
+  library — an adapter belongs in the caller. Store failures are made *identifiable*
+  instead: they wrap `core.ErrStore`, and the caller decides fail-open vs
+  fail-closed with `errors.Is(err, core.ErrStore)`. Core never picks a status code,
+  a response shape, or a degradation policy.
 - Postgres v1: `SELECT … FOR UPDATE` only (advisory-lock strategy deferred).
 
 ## Status
-All six phases done and **verified** (Go 1.26.5; core `go test -race` + Redis/Postgres
-testcontainers TCK all green). See `PLANS.md` for the phase table and the exact
-run commands. Build/test quick reference is in `../CLAUDE.md`.
+`PLANS.md` is the tracker — phase table, decisions, and open questions. Build/test quick
+reference is in `../CLAUDE.md`; `/verify` runs the suite.
