@@ -17,13 +17,16 @@ atomically. So the algorithm lives once, in `core`.
 ## Process & context
 Roles, process, and progress live in **`ai-context/`** (start with
 `ai-context/README.md`; `ai-context/PLANS.md` is the architect-owned progress
-tracker). Detailed design and investigation notes are kept local under
-`docs/internal/` (untracked).
+tracker). User-facing backend docs are in `docs/client/`. Detailed design and
+investigation notes are kept local under `docs/internal/` (untracked).
 
 ## Layout (go.work workspace, 4 modules)
 Root is a `go.work` workspace, **not** a module — build/test per module.
 
-- `core/` — API + algorithm, **zero external runtime deps**.
+- `core/` — API + algorithm, **zero external runtime deps**. `core` is also
+  **transport-agnostic**: no `net/http`, no gRPC, no middleware. An adapter belongs
+  in the caller; store failures surface as `core.ErrStore` and the caller picks
+  fail-open vs fail-closed.
   - `state.go` — the token-bucket math (single bandwidth): 3 int64s
     `[lastRefillNanos, currentSize, roundingError]`, greedy rounding-error carry +
     intervally boundaries. Ported from bucket4j `BucketState64BitsInteger`.
@@ -41,17 +44,22 @@ Root is a `go.work` workspace, **not** a module — build/test per module.
     runs the SAME suite; this is how provider-swap (AC-46) is proven.
 - `redisstore/` (package `redisstore`) — `CASStore` via Lua compare-and-swap + `SET NX`.
 - `pgstore/` (package `pgstore`) — `LockStore` via `SELECT … FOR UPDATE`.
-- `examples/` — two minimal `main` packages, `examples/redis/` and
-  `examples/postgres/`, each with a `docker-compose.yml`. Each is a plain
-  `net/http` server whose only backend-specific line is the `*core.ProxyManager`
-  constructor; everything after that (`pm.Bucket`, `TryConsume`) is identical.
-  Deliberately un-abstracted — no shared package between them — so the library
-  call is never one hop away from `main()`.
+  `SchemaSQL` exposes the DDL for users who run their own migrations; `EnsureSchema`
+  applies it directly.
+- `examples/` — two `main` packages (`examples/redis/`, `examples/postgres/`), each
+  with a `docker-compose.yml`. **The `net/http` lives here, in the demo programs —
+  not in `core`.** Only backend-specific line is the `*core.ProxyManager` constructor;
+  everything after that (`pm.Bucket`, `TryConsume`) is identical. Deliberately
+  un-abstracted — no shared package between them — so the library call is never one
+  hop away from `main()`.
 
 ## Conventions
 - **TDD, tests first.** The acceptance criteria (in `ai-context/`) are the contract;
   each criterion has a stable ID (AC-11 … AC-46) referenced from the test name
   (`TestAC12_...`). The shared `core/tck` suite is their executable form.
+- **Comments earn their place.** Godoc on every exported symbol, plus comments that
+  explain a *why* the code cannot. No restating the code, no tutorial narrative, no
+  war stories. Deliberate shortcuts get a `ponytail:` line naming the ceiling.
 - **v1 = single bandwidth per bucket.** Deferred: multi-bandwidth, async, verbose
   diagnostics, optimization/batching, config replacement + versioning, grid providers.
 - New distributed backend = implement `core.CASStore` **or** `core.LockStore`, then
@@ -60,8 +68,8 @@ Root is a `go.work` workspace, **not** a module — build/test per module.
   (shared across nodes). Both injectable via `WithClock` for tests.
 
 ## Build & test
-`/verify` runs this whole suite (all three modules, podman env already set) and routes
-failures to the investigator — the block below is what it does, and the fallback.
+`/verify` discovers the workspace modules, runs the suite, and routes failures to the
+investigator — the block below is what it does, and the fallback.
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH" GOTOOLCHAIN=local   # Go is userspace, no system install
 cd core && go test -race ./...        # algorithm + local + blocking + in-memory TCK (no container)

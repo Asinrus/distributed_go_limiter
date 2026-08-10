@@ -17,6 +17,9 @@ the algorithm + API; `redisstore` and `pgstore` modules are pluggable backends.
 - Tests: testcontainers-go (assumes Docker-compatible runtime at test time).
 - Go toolchain installed by the user.
 - Postgres v1: SELECT FOR UPDATE strategy only (advisory lock deferred).
+- **`core` is protocol-agnostic**: no HTTP, gRPC, or any transport inside the library —
+  an adapter belongs in the caller. Store failures wrap `core.ErrStore` so the caller
+  owns the fail-open vs fail-closed decision. core never picks a status code.
 
 ## Phases & status
 | # | Phase | Status | Notes |
@@ -25,16 +28,15 @@ the algorithm + API; `redisstore` and `pgstore` modules are pluggable backends.
 | 1 | Architect docs (docs/internal/project) | ✅ done | ARCHITECTURE (+mermaid, swap examples), EXT_*, ACCEPTANCE_CRITERIA, QUESTIONS |
 | 2 | core: state/bandwidth/config/probe (TDD) | ✅ done | AC-11..19 tests written |
 | 3 | core: LocalBucket + BlockingBucket (TDD) | ✅ done | AC-21..23, AC-31/32 tests written |
-| 4 | core: Store/ProxyManager/command/codec/memstore + TCK | ✅ done | AC-41..46 via in-memory; codec + AC-45 TTL |
+| 4 | core: Store/ProxyManager/command/codec/memstore + TCK | ✅ done | AC-41..44 via in-memory; codec + AC-45 TTL |
 | 5 | redis backend + testcontainers TCK | ✅ verified | Lua CAS + SetNX; TCK + AC-45 green on real Redis |
 | 6 | postgres backend + testcontainers TCK | ✅ verified | SELECT FOR UPDATE; TCK + AC-45/RemoveExpired green on real Postgres |
-| 7 | ~~core/httplimit: HTTP middleware~~ → `core.ErrStore` | 🗑 removed | Middleware deleted (both files): **core is protocol-agnostic**, HTTP is a client concern. Replaced by exported `core.ErrStore` (`core/bucket.go:19`) — every store-boundary error wraps it via `storeErr` (`core/command.go:17`, 5 call sites, `fmt.Errorf("%w: %w", …)` so the backend error stays unwrappable); `ErrCASRetriesExhausted` wraps it too. Caller picks fail-open/fail-closed. 8 tests in `core/storeerr_test.go` green; no AC ids yet (Q9) |
 
 ## Verification — DONE (Go 1.26.5, podman/testcontainers)
 All green:
 - `core`: `go vet` clean; `go test -race ./...` PASS (AC-11..46 incl. concurrency, blocking, in-memory TCK).
-- `redisstore`: TCK AC-41..46 + AC-45 expiration PASS on `redis:7-alpine`.
-- `pgstore`: TCK AC-41..46 + AC-45 + RemoveExpired PASS on `postgres:16-alpine`.
+- `redisstore`: TCK AC-41..44 + AC-45 expiration PASS on `redis:7-alpine`.
+- `pgstore`: TCK AC-41..44 + AC-45 + RemoveExpired PASS on `postgres:16-alpine`.
 
 One defect found & fixed during verification (impl-level, no problem_report needed):
 `testcontainers.TerminateContainer` doesn't exist in v0.33.0 → switched both backend
@@ -85,19 +87,11 @@ loop until AC pass. Architect records outcome here.
   pgstore commits it with `expires_at` NULL before the read-only callback runs and
   the sweep can never reclaim it; Redis/memstore create nothing on the same path,
   so the two backends differ observably. Two candidate fixes in §3 — **decision pending**.
-- Q7 (retired — **closed by removal, not by an answer**): it asked which AC block
-  should cover `core/httplimit` and whether its fail-closed-on-store-error default
-  (503) was deliberate. `core/httplimit` has been deleted. Ruling: **core is
-  protocol-agnostic** — status codes, response shape, and fail-open vs fail-closed
-  are caller decisions, so the middleware (a client-side adapter that had leaked
-  into core) left the library and the degradation choice moved to the caller via
-  `errors.Is(err, core.ErrStore)`. Rejected the alternative of keeping the package
-  and ratifying its default: that would make core own a policy it cannot know.
-  The proposed AC-51..57 block is **dropped** (never ratified) — the criterion that
-  survives it is the `ErrStore` one, tracked as Q9. The `Cost(n<1)` defect dies with
-  the package; `validateConsume` (`core/bucket.go:71`) still rejects `n < 1` at the
-  bucket API, which is the right place for it. Report
-  `docs/internal/project/problem_reports/httplimit-1.md` kept for history.
+- Q7 (retired — **closed by removal**): asked which AC block should cover an HTTP
+  middleware in `core` and whether its fail-closed default was deliberate. Ruling:
+  core is protocol-agnostic, so the middleware left the library and the degradation
+  choice moved to the caller via `errors.Is(err, core.ErrStore)`. The proposed
+  AC-51..57 block is dropped; the one criterion that survives it is tracked as Q9.
 - Q8 (open, from Dev): `LockStore.Do` (`core/store.go:34-35`) does not specify what
   a store must do with the callback's error. The decode-vs-outage guard in
   `lockRunner.execute` (`core/command.go:100`) matches with `errors.Is`, so a store
@@ -118,11 +112,15 @@ loop until AC pass. Architect records outcome here.
 - _impl_: phases 2–6 implemented TDD; all core + backend code written.
 - _verify_: Go 1.26.5 installed userspace; full suite green on all 3 backends via
   podman/testcontainers. Fixed testcontainers `TerminateContainer` API mismatch.
-- _reconcile_: module names corrected to `redisstore`/`pgstore` (f3eeeac); phase 7
-  `core/httplimit` added (44d711a); Q6 linked to problem report q6-1.
+- _reconcile_: module names corrected to `redisstore`/`pgstore` (f3eeeac); Q6 linked
+  to problem report q6-1.
 - _agents_: roles now exist as subagents (`.claude/agents/`, `/verify`) and are
   indexed from `ai-context/README.md`; Q5 corrected (identifiers fixed in code,
-  behaviour-change ruling pending); Q7 opened from `httplimit-1.md`.
-- _protocol-agnostic core_: `core/httplimit` deleted and Q7 retired by removal;
-  store failures now surface as `core.ErrStore` (caller owns the degradation
-  policy); Q8 (`LockStore.Do` error contract) and Q9 (missing `ErrStore` AC) opened.
+  behaviour-change ruling pending).
+- _protocol-agnostic core_: an HTTP middleware briefly added to `core` was deleted
+  and Q7 retired by removal; store failures now surface as `core.ErrStore` (caller
+  owns the degradation policy); Q8 (`LockStore.Do` error contract) and Q9 (missing
+  `ErrStore` AC) opened.
+- _review_: PR #1 review addressed — comments culled repo-wide, client docs moved to
+  `docs/client/`, `pgstore.SchemaSQL` added so users can apply the schema with their
+  own migration tool, `/verify` made module-agnostic.

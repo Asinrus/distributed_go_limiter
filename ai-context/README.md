@@ -13,15 +13,16 @@ tiny `Store`. **Primary goal: swap the provider without changing rate-limiting
 logic** — the same conformance suite (`core/tck`) passes against all three.
 
 ## What lives where
-| Path | Tracked | Contents |
-|------|---------|----------|
-| `ai-context/PLANS.md` | ✅ committed | Progress tracker (phases, status, decisions). **Architect-owned — only the architect edits it.** |
-| `ai-context/README.md` | ✅ committed | This guide. |
-| `docs/internal/project/` | ⛔ local | `ARCHITECTURE.md` (mermaid + provider-swap examples), `EXT_REDIS.md`, `EXT_POSTGRES.md`, `ACCEPTANCE_CRITERIA.md`, `QUESTIONS_TO_ARCHITECT.md`, `problem_reports/`. |
-| `docs/internal/bucket4j/` | ⛔ local | Investigation of the reference library (algorithm, backends, module/test layout, provider-swap abstraction). |
-| `.claude/agents/` | ✅ committed | `architect.md`, `dev.md`, `investigator.md` — the roles below, in executable form. |
-| `.claude/commands/` | ✅ committed | `/verify` — full suite across the three modules; dispatches the investigator on failure. |
-| `CLAUDE.md` | ✅ committed | Code map + build/test commands. **Dev-owned** — it follows the code, so Dev updates it; the Architect files a question in `QUESTIONS_TO_ARCHITECT.md` rather than editing it silently. |
+| Path | Contents |
+|------|----------|
+| `ai-context/PLANS.md` | Progress tracker (phases, status, decisions). **Architect-owned — only the architect edits it.** |
+| `ai-context/README.md` | This guide. |
+| `docs/client/` | User-facing backend docs (`redis.md`, `postgres.md`). |
+| `docs/internal/project/` | `ARCHITECTURE.md` (mermaid + provider-swap examples), `EXT_REDIS.md`, `EXT_POSTGRES.md`, `ACCEPTANCE_CRITERIA.md`, `QUESTIONS_TO_ARCHITECT.md`, `problem_reports/`. |
+| `docs/internal/bucket4j/` | Investigation of the reference library (algorithm, backends, module/test layout, provider-swap abstraction). |
+| `.claude/agents/` | `architect.md`, `dev.md`, `investigator.md` — the roles below, in executable form. |
+| `.claude/commands/` | `/verify` — full suite across every workspace module; dispatches the investigator on failure. |
+| `CLAUDE.md` | Code map + build/test commands. **Dev-owned** — it follows the code, so Dev updates it; the Architect files a question in `QUESTIONS_TO_ARCHITECT.md` rather than editing it silently. |
 
 ## Roles & process
 The three roles are dispatchable subagents; **their agent files are the
@@ -57,7 +58,5 @@ failure automatically, so the loop starts without anyone remembering to start it
 - Postgres v1: `SELECT … FOR UPDATE` only (advisory-lock strategy deferred).
 
 ## Status
-Phases 0–6 done and **verified** (Go 1.26.5; core `go test -race` + Redis/Postgres
-testcontainers TCK all green). Phase 7 (`core/httplimit`) was **removed** — core is
-protocol-agnostic; it was replaced by `core.ErrStore`, whose tests pass but which no
-acceptance criterion covers yet (open Q9). See `PLANS.md` for the phase table and the exact run commands. Build/test quick reference is in `../CLAUDE.md`.
+`PLANS.md` is the tracker — phase table, decisions, and open questions. Build/test quick
+reference is in `../CLAUDE.md`; `/verify` runs the suite.
