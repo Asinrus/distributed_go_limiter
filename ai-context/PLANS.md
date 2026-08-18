@@ -1,25 +1,23 @@
 # PLANS.md — Distributed Token-Bucket Rate Limiter (Go)
 
 > **Architect-owned.** Only the architect writes here. Living progress tracker:
-> phases, status, decisions, and outcomes. Dev/investigator read it; they raise
-> changes via `docs/internal/project/QUESTIONS_TO_ARCHITECT.md` or `problem_reports/`.
+> phases, status, and outcomes (decisions live in `docs/adr/`). Dev/investigator
+> read it; they raise changes via a task file in `ai-context/tasks/`.
 
 ## Goal
 Port bucket4j's token-bucket (shared-state, not queue) to Go. `core` module owns
 the algorithm + API; `redisstore` and `pgstore` modules are pluggable backends.
 **Primary design goal: swap provider without changing the rate-limiting logic.**
 
-## Confirmed decisions
-- **v1 = single bandwidth** per bucket. Multi-bandwidth deferred.
-- Scope: lean + blocking. Deferred: multi-bandwidth, async, verbose, optimization
-  layers, config replacement/versioning, pluggable math, cross-language wire compat.
-- Module path: `github.com/asinrus/distributed_go_limiter/{core,redisstore,pgstore,examples}`.
-- Tests: testcontainers-go (assumes Docker-compatible runtime at test time).
-- Go toolchain installed by the user.
-- Postgres v1: SELECT FOR UPDATE strategy only (advisory lock deferred).
-- **`core` is protocol-agnostic**: no HTTP, gRPC, or any transport inside the library —
-  an adapter belongs in the caller. Store failures wrap `core.ErrStore` so the caller
-  owns the fail-open vs fail-closed decision. core never picks a status code.
+## Decisions
+Ratified decisions live in `docs/adr/` now, not here — see
+`docs/adr/0007-tasks-done-workflow.md` for why. Quick index of what's there:
+single-bandwidth v1 (0001), core stays protocol-agnostic (0002), Postgres
+SELECT-FOR-UPDATE over advisory locks (0003), TEXT bucket keys, no mapper
+(0004), LocalBucket mutex over lock-free CAS (0005), testcontainers for
+backend TCK (0006). Smaller settled facts that don't clear the ADR bar (module
+path, Go toolchain installed by the user) aren't tracked anywhere formal —
+they're just true of the repo.
 
 ## Phases & status
 | # | Phase | Status | Notes |
@@ -58,54 +56,42 @@ with `unqualified-search-registries = ["docker.io"]` for short image names.
 Legend: ✅ done · 🟡 in progress · ⬜ pending · ❌ blocked · 🗑 removed.
 
 ## Definition of done (per phase)
-Every acceptance criterion for the phase (see `docs/internal/project/ACCEPTANCE_CRITERIA.md`)
-has a passing test. `go build ./...` + `go vet ./...` clean. Backends pass the TCK
+Every acceptance criterion for the phase has a passing test (criteria were
+tracked in `docs/internal/project/ACCEPTANCE_CRITERIA.md`, which no longer
+exists in this workspace — the AC ids themselves survive as `TestAC<id>_...`
+test names in the code; re-deriving a canonical criteria doc is out of scope
+for this restructuring and, if wanted, belongs in its own task). `go build
+./...` + `go vet ./...` clean. Backends pass the TCK
 against a real container.
 
 ## Failure-handling loop
-On any verification failure → investigator writes
-`docs/internal/project/problem_reports/<phase>-<n>.md` (symptom, failing AC id, root cause,
-defect-vs-spec-gap) → triggers Dev (code fix) or Architect (spec/design fix) →
-loop until AC pass. Architect records outcome here.
+On any verification failure → Architect opens (or points at) a task in
+`ai-context/tasks/` → Investigator appends findings to it (symptom, failing AC
+id, root cause, defect-vs-spec-gap) → triggers Dev (code fix) or Architect
+(spec/design fix) → loop until AC pass → **tester** agent independently reruns
+`/verify` + a small end-to-end scenario and moves the file to
+`ai-context/done/`. Architect records the outcome here.
 
-## Open questions (tracked in QUESTIONS_TO_ARCHITECT.md)
-- Q1–Q4 answered — TEXT keys (no mapper, rejected the BIGINT/VARCHAR split),
-  TTL shipped on both backends, in-memory ProxyManager shipped and exported,
-  LocalBucket stays mutex-based (measured against atomic.Pointer CAS).
-- Q5 (partly closed): Postgres table/column names reached SQL via `fmt.Sprintf`,
-  unescaped. **Fixed in code** — `pgstore/pgstore.go:67` routes every configured
-  identifier through `pgx.Identifier{}.Sanitize()`. The earlier "low priority under
-  the current threat model" assessment was **wrong**: `TestHostileIdentifiersAreEscapedNotExecuted`
-  (`pgstore/pgstore_test.go:85`) shows a pre-fix injection reached the Postgres parser.
-  **Ruling pending** on two behaviour changes the fix introduces: (a) `WithTable("MyTable")`
-  is now case-sensitive; (b) `WithTable("myschema.bucket")` now breaks — one-line fix
-  available (`pgx.Identifier(strings.Split(name, "."))`). Accept, or restore either?
-- Q6 (open): Postgres leaks a permanent placeholder row for any key that is only
-  ever read (`AvailableTokens`/`EstimateAbilityToConsume`), never written.
-  Report: `docs/internal/project/problem_reports/q6-1.md` — routed as a **spec gap**
-  (no AC covers storage footprint): `SELECT … FOR UPDATE` needs a row to lock, so
-  pgstore commits it with `expires_at` NULL before the read-only callback runs and
-  the sweep can never reclaim it; Redis/memstore create nothing on the same path,
-  so the two backends differ observably. Two candidate fixes in §3 — **decision pending**.
-- Q7 (retired — **closed by removal**): asked which AC block should cover an HTTP
-  middleware in `core` and whether its fail-closed default was deliberate. Ruling:
-  core is protocol-agnostic, so the middleware left the library and the degradation
-  choice moved to the caller via `errors.Is(err, core.ErrStore)`. The proposed
-  AC-51..57 block is dropped; the one criterion that survives it is tracked as Q9.
-- Q8 (open, from Dev): `LockStore.Do` (`core/store.go:34-35`) does not specify what
-  a store must do with the callback's error. The decode-vs-outage guard in
-  `lockRunner.execute` (`core/command.go:100`) matches with `errors.Is`, so a store
-  that *wraps* fn's error is fine, but a store that *replaces* it would get its own
-  decode failures mis-tagged `ErrStore`. Proposed contract wording: *"Do must return
-  fn's error unmodified or wrapped, never replaced."* **Not ratified** — needs a
-  ruling on whether this becomes doc-only or also an AC the TCK enforces.
-- Q9 (open): the 8 tests in `core/storeerr_test.go` map to no AC id and are named
-  descriptively, so nothing in the spec pins the `ErrStore` contract. Criterion
-  needed: *a store-layer failure is distinguishable from misuse and from refusal;
-  the backend error remains unwrappable; a corrupt-state decode failure is NOT
-  reported as a store failure.* The last clause is the non-obvious half (see the
-  guard at `core/command.go:85-102`). **AC id not yet assigned** — numbering to be
-  ratified with Q8, then the tests renamed `TestAC…`.
+## Open work (tracked as task files in ai-context/tasks/)
+`docs/internal/project/QUESTIONS_TO_ARCHITECT.md` no longer exists (it was
+gitignored and never present in this workspace); the four still-open items it
+tracked are now task files, carrying forward what `PLANS.md` had recorded
+about each:
+- `ai-context/tasks/q5-pgstore-identifier-behavior-change.md` — accept or fix
+  the two behavior changes from escaping Postgres identifiers
+  (`pgstore/pgstore.go:67`): case-sensitive table names, broken dotted
+  schema-qualified names.
+- `ai-context/tasks/q6-pgstore-read-only-row-leak.md` — pgstore leaks a
+  permanent placeholder row for read-only keys; Redis/memstore don't. Spec
+  gap, no AC covers storage footprint.
+- `ai-context/tasks/q8-lockstore-do-error-contract.md` — ratify what
+  `LockStore.Do` may do to the callback's error (doc-only vs. TCK-enforced).
+- `ai-context/tasks/q9-errstore-contract-ac.md` — assign an AC id to the
+  `ErrStore` contract the 8 tests in `core/storeerr_test.go` currently test
+  without one; blocked on Q8's ruling landing first.
+
+Q1–Q4 and Q7 were already answered/retired before this session and are
+folded into `docs/adr/` (0001-0006) rather than repeated here.
 
 ## Changelog
 - _init_: phases defined; investigation complete; architect docs started.
@@ -124,3 +110,15 @@ loop until AC pass. Architect records outcome here.
 - _review_: PR #1 review addressed — comments culled repo-wide, client docs moved to
   `docs/client/`, `pgstore.SchemaSQL` added so users can apply the schema with their
   own migration tool, `/verify` made module-agnostic.
+- _restructure_: `docs/internal/` (gitignored, absent from this workspace) retired.
+  Ratified decisions migrated to `docs/adr/` (0001-0007). Replaced
+  `problem_reports/` + per-question tracking with a single `ai-context/tasks/` →
+  `ai-context/done/` lifecycle for both dev and investigation work, gated on a
+  new **tester** role (`.claude/agents/tester.md`, model haiku) that
+  independently reruns `/verify` plus a small end-to-end scenario before moving
+  a task to `done/` — not self-attested by whoever did the work. Added `model:`
+  to all four agent files (architect: opus, dev: sonnet, investigator: sonnet,
+  tester: haiku). Q5/Q6/Q8/Q9 carried forward as task files, unresolved (ruling
+  deferred to next session, per explicit decision to restructure first). Seeded
+  three new-backend task files (MongoDB, etcd, Hazelcast) as an unordered,
+  independent backlog; Memcached considered and dropped from scope for now.
