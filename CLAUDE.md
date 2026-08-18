@@ -17,8 +17,9 @@ atomically. So the algorithm lives once, in `core`.
 ## Process & context
 Roles, process, and progress live in **`ai-context/`** (start with
 `ai-context/README.md`; `ai-context/PLANS.md` is the architect-owned progress
-tracker). User-facing backend docs are in `docs/client/`. Detailed design and
-investigation notes are kept local under `docs/internal/` (untracked).
+tracker). User-facing backend docs are in `docs/client/`. Ratified decisions
+are recorded as ADRs in `docs/adr/`; work items track through
+`ai-context/tasks/` → `ai-context/done/`.
 
 ## Layout (go.work workspace, 4 modules)
 Root is a `go.work` workspace, **not** a module — build/test per module.

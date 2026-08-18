@@ -62,6 +62,6 @@ Modules that are `main` packages with no tests (`examples`) only need `go build 
 Report the failing test name and the AC id it maps to (tests are named `TestAC<id>_...`;
 AC-41..44 are `t.Run` subtests in `core/tck/tck.go`, run identically by every backend).
 
-Do not fix it inline. Dispatch the **investigator** agent to produce a problem report at
-`docs/internal/project/problem_reports/` first — root cause and the defect-vs-spec-gap
-routing come before any edit.
+Do not fix it inline. Dispatch the **investigator** agent to write its findings into the
+relevant task file in `ai-context/tasks/` first (ask the architect to create one if none
+exists yet) — root cause and the defect-vs-spec-gap routing come before any edit.

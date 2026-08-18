@@ -57,9 +57,10 @@ replica keeps its own count and doubling the replicas silently doubles the real 
   server configuration, what is stored.
 - [`docs/client/postgres.md`](docs/client/postgres.md) — schema and how to apply it with
   your own migration tool, sweeping expired rows, server configuration.
-- `ai-context/` — process, roles, and progress (`ai-context/PLANS.md` tracker).
+- `ai-context/` — process, roles, and progress (`ai-context/PLANS.md` tracker,
+  `ai-context/tasks/` → `ai-context/done/` work items).
+- `docs/adr/` — ratified architecture decisions, one file each.
 - `CLAUDE.md` — code map + build/test commands.
-- Detailed design & investigation notes are kept local under `docs/internal/` (untracked).
 
 ## Status
 v1: single bandwidth per bucket, blocking consume, three backends. See `ai-context/PLANS.md`.

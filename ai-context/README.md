@@ -1,10 +1,8 @@
 # ai-context
 
 Entry point for AI agents / contributors working on this repo: the process, roles,
-and progress. This folder is **committed**. The detailed design & investigation
-documents are **local-only** under `docs/internal/` (gitignored) — if they're
-missing from a fresh clone, they can be regenerated from the reference library
-(`../bucket4j`) or requested from the person who has them.
+and progress. This folder is **committed**, alongside `docs/adr/` (ratified
+decisions) — see below for why that replaced the old local-only `docs/internal/`.
 
 ## Project in one line
 A distributed **token-bucket** rate limiter (port of bucket4j). `core` owns the
@@ -15,33 +13,42 @@ logic** — the same conformance suite (`core/tck`) passes against all three.
 ## What lives where
 | Path | Contents |
 |------|----------|
-| `ai-context/PLANS.md` | Progress tracker (phases, status, decisions). **Architect-owned — only the architect edits it.** |
+| `ai-context/PLANS.md` | Progress tracker: phase table + changelog only. **Architect-owned — only the architect edits it.** |
 | `ai-context/README.md` | This guide. |
+| `ai-context/tasks/` | One file per work item (dev or investigation), created by the Architect. Moves to `ai-context/done/` only when the tester agent confirms both `/verify` and an end-to-end run pass. |
+| `ai-context/done/` | Completed, tester-verified task files. |
+| `docs/adr/` | One file per ratified decision that's hard to reverse, surprising without context, and the result of a real trade-off — see `docs/adr/0007-tasks-done-workflow.md`. |
 | `docs/client/` | User-facing backend docs (`redis.md`, `postgres.md`). |
-| `docs/internal/project/` | `ARCHITECTURE.md` (mermaid + provider-swap examples), `EXT_REDIS.md`, `EXT_POSTGRES.md`, `ACCEPTANCE_CRITERIA.md`, `QUESTIONS_TO_ARCHITECT.md`, `problem_reports/`. |
-| `docs/internal/bucket4j/` | Investigation of the reference library (algorithm, backends, module/test layout, provider-swap abstraction). |
-| `.claude/agents/` | `architect.md`, `dev.md`, `investigator.md` — the roles below, in executable form. |
+| `.claude/agents/` | `architect.md`, `dev.md`, `investigator.md`, `tester.md` — the roles below, in executable form. |
 | `.claude/commands/` | `/verify` — full suite across every workspace module; dispatches the investigator on failure. |
-| `CLAUDE.md` | Code map + build/test commands. **Dev-owned** — it follows the code, so Dev updates it; the Architect files a question in `QUESTIONS_TO_ARCHITECT.md` rather than editing it silently. |
+| `CLAUDE.md` | Code map + build/test commands. **Dev-owned** — it follows the code, so Dev updates it; the Architect opens a task in `ai-context/tasks/` rather than editing it silently. |
+
+`docs/internal/` no longer exists — it was gitignored, local-only, and absent
+from this workspace entirely. Its role is split between `docs/adr/`
+(committed decisions) and `ai-context/tasks/` (committed work items,
+including what used to be `problem_reports/`).
 
 ## Roles & process
-The three roles are dispatchable subagents; **their agent files are the
+The four roles are dispatchable subagents; **their agent files are the
 authoritative definition** — read those, not a paraphrase here.
 
-| Role | Definition | Owns |
-|------|-----------|------|
-| Architect | `.claude/agents/architect.md` | `ai-context/`, `docs/internal/project/` |
-| Dev | `.claude/agents/dev.md` | Go source, tests, `CLAUDE.md` |
-| Investigator | `.claude/agents/investigator.md` | `docs/internal/project/problem_reports/` |
+| Role | Model | Definition | Owns |
+|------|-------|-----------|------|
+| Architect | opus | `.claude/agents/architect.md` | `ai-context/PLANS.md`, `docs/adr/`, `ai-context/tasks/` (creates) |
+| Dev | sonnet | `.claude/agents/dev.md` | Go source, tests, `CLAUDE.md` |
+| Investigator | sonnet | `.claude/agents/investigator.md` | Writes findings into the task file it's given |
+| Tester | haiku | `.claude/agents/tester.md` | Moves `ai-context/tasks/*` → `ai-context/done/*` — the only role that does |
 
 **Failure-handling loop** (the part no single agent file encodes) — on any
 verification failure (build error, failing test, unmet criterion): the
-Investigator writes `docs/internal/project/problem_reports/<phase>-<n>.md`
-(symptom, failing AC id, root cause, defect-vs-spec-gap) and that routing triggers
-Dev (code fix) or Architect (spec/design fix). Loop until the criteria pass;
-Architect records the outcome in `PLANS.md`. `/verify`
-(`.claude/commands/verify.md`) runs the suite and dispatches the Investigator on
-failure automatically, so the loop starts without anyone remembering to start it.
+Architect opens (or points at) a task in `ai-context/tasks/`; the Investigator
+appends findings to it (symptom, failing AC id, root cause, defect-vs-spec-gap)
+and that routing triggers Dev (code fix) or Architect (spec/design fix). Loop
+until the criteria pass, then the Tester independently reruns `/verify` plus a
+small end-to-end scenario and only then moves the file to `ai-context/done/`.
+`/verify` (`.claude/commands/verify.md`) runs the suite and dispatches the
+Investigator on failure automatically, so the loop starts without anyone
+remembering to start it.
 
 ## Key decisions (v1)
 - **Single bandwidth per bucket.** Deferred: multi-bandwidth, async API, verbose
