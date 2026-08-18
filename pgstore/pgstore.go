@@ -29,7 +29,9 @@ func defaultConfig() config {
 // Option configures the Postgres backend.
 type Option func(*config)
 
-// WithTable sets the bucket table name (default "bucket").
+// WithTable sets the bucket table name (default "bucket"). The value is a single
+// identifier, quoted verbatim — case-sensitive and not schema-qualifiable. For a
+// non-default schema, set search_path on the connection and pass a bare table name.
 func WithTable(t string) Option { return func(c *config) { c.table = t } }
 
 // WithIDColumn sets the primary-key column name (default "id").

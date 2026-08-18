@@ -81,8 +81,7 @@ func TestPostgresExpiration(t *testing.T) {
 // application config rather than end-user input, but a hostile identifier must be
 // escaped, never executed — and every interpolating statement must agree on the
 // escaping, including the derived index name and the information_schema guard.
-// No acceptance criterion covers SQL identifier safety (see open question Q5).
-func TestHostileIdentifiersAreEscapedNotExecuted(t *testing.T) {
+func TestAC47_HostileIdentifiersAreEscapedNotExecuted(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
 

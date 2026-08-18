@@ -20,7 +20,10 @@ same one `core.NewInMemoryProxyManager()` gives you with no container at all.
 
 Identifiers cannot be bind parameters, so these names are interpolated into SQL — quoted and
 escaped, never executed. That makes them case-sensitive and exact: `WithTable("Bucket")`
-means the table `"Bucket"`, not `bucket`.
+means the table `"Bucket"`, not `bucket`. It is also a single identifier, not schema-qualifiable:
+`WithTable("myschema.bucket")` names a table literally called `myschema.bucket`, not `bucket`
+inside schema `myschema`. To target a non-default schema, set `search_path` on the connection
+and pass a bare table name.
 
 ## Schema
 
