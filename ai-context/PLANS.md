@@ -77,10 +77,9 @@ id, root cause, defect-vs-spec-gap) → triggers Dev (code fix) or Architect
 gitignored and never present in this workspace); the four still-open items it
 tracked are now task files, carrying forward what `PLANS.md` had recorded
 about each:
-- `ai-context/tasks/q5-pgstore-identifier-behavior-change.md` — accept or fix
-  the two behavior changes from escaping Postgres identifiers
-  (`pgstore/pgstore.go:67`): case-sensitive table names, broken dotted
-  schema-qualified names.
+- `ai-context/tasks/q5-pgstore-identifier-behavior-change.md` — **ruled**
+  (ADR 0008): both behavior changes accepted as-is; `strings.Split` rejected.
+  Follow-up doc/AC task done: `ai-context/done/pgstore-identifier-docs-and-ac47.md`.
 - `ai-context/tasks/q6-pgstore-read-only-row-leak.md` — pgstore leaks a
   permanent placeholder row for read-only keys; Redis/memstore don't. Spec
   gap, no AC covers storage footprint.
@@ -122,3 +121,8 @@ folded into `docs/adr/` (0001-0006) rather than repeated here.
   deferred to next session, per explicit decision to restructure first). Seeded
   three new-backend task files (MongoDB, etcd, Hazelcast) as an unordered,
   independent backlog; Memcached considered and dropped from scope for now.
+- _q5_: pgstore identifier behavior ruled (ADR 0008) — case-sensitive names
+  accepted, dotted schema-qualified names stay broken (`strings.Split` rejected:
+  breaks `CREATE INDEX` naming and silently disables the `information_schema`
+  BIGINT guard; `search_path` is the workaround). No SQL change; follow-up task
+  covers the godoc/client-doc note and assigns AC-47 to identifier safety.
