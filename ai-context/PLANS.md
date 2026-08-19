@@ -15,7 +15,8 @@ Ratified decisions live in `docs/adr/` now, not here — see
 single-bandwidth v1 (0001), core stays protocol-agnostic (0002), Postgres
 SELECT-FOR-UPDATE over advisory locks (0003), TEXT bucket keys, no mapper
 (0004), LocalBucket mutex over lock-free CAS (0005), testcontainers for
-backend TCK (0006). Smaller settled facts that don't clear the ADR bar (module
+backend TCK (0006), pgstore identifiers are one quoted name (0008), pgstore
+creates no row for a read-only miss (0010). Smaller settled facts that don't clear the ADR bar (module
 path, Go toolchain installed by the user) aren't tracked anywhere formal —
 they're just true of the repo.
 
@@ -80,13 +81,15 @@ about each:
 - `ai-context/tasks/q5-pgstore-identifier-behavior-change.md` — **ruled**
   (ADR 0008): both behavior changes accepted as-is; `strings.Split` rejected.
   Follow-up doc/AC task done: `ai-context/done/pgstore-identifier-docs-and-ac47.md`.
-- `ai-context/tasks/q6-pgstore-read-only-row-leak.md` — pgstore leaks a
-  permanent placeholder row for read-only keys; Redis/memstore don't. Spec
-  gap, no AC covers storage footprint.
-- `ai-context/tasks/q8-lockstore-do-error-contract.md` — **ruled** (ADR 0009):
-  `Do` must return `fn`'s error unmodified or `%w`-wrapped, never replaced,
-  flattened, or swallowed. Doc-only; TCK enforcement deferred. Follow-up:
-  `ai-context/tasks/lockstore-do-godoc-contract.md`.
+- `ai-context/done/q6-pgstore-read-only-row-leak.md` — **ruled and done**
+  (ADR 0010): the insert moves inside the locking transaction and runs only
+  when the callback writes; both original candidates rejected. Implemented,
+  black-box verified: `ai-context/done/pgstore-no-row-for-read-only-miss-ac48.md`
+  (AC-48 = storage footprint tracks writes, not reads).
+- `ai-context/done/q8-lockstore-do-error-contract.md` — **ruled and done**
+  (ADR 0009): `Do` must return `fn`'s error unmodified or `%w`-wrapped, never
+  replaced, flattened, or swallowed. Doc-only; TCK enforcement deferred.
+  Implemented, black-box verified: `ai-context/done/lockstore-do-godoc-contract.md`.
 - `ai-context/tasks/q9-errstore-contract-ac.md` — assign an AC id to the
   `ErrStore` contract the 8 tests in `core/storeerr_test.go` currently test
   without one; unblocked by Q8 — the decode-vs-outage clause stays a core
@@ -129,9 +132,27 @@ folded into `docs/adr/` (0001-0006) rather than repeated here.
   breaks `CREATE INDEX` naming and silently disables the `information_schema`
   BIGINT guard; `search_path` is the workaround). No SQL change; follow-up task
   covers the godoc/client-doc note and assigns AC-47 to identifier safety.
-- _q8_: `LockStore.Do` error contract ruled (ADR 0009) — must propagate `fn`'s
-  error unmodified or `%w`-wrapped (never `%v`-flattened or swallowed); doc-only,
-  TCK enforcement deferred until a second `LockStore` exists (`tck.Run` only sees
-  a `ProxyManager`, so it can't plant the corrupt bytes needed to trip `fn`).
-  Relaxing core's guard to ignore `Do`'s return rejected: breaks on a store that
-  retries `fn` internally. `pgstore` already complies. Q9 unblocked.
+- _q6_: pgstore read-only row leak ruled (ADR 0010) and implemented —
+  placeholder insert stops being committed up front; it moves inside the
+  locking transaction and runs only when the callback writes, so a read of
+  an absent key persists nothing (parity with Redis/memstore). Short-
+  `expires_at` and existence-probe candidates rejected. `TestAC48_...`
+  watched failing against the pre-fix code first; black-box verified via
+  `examples/k6/run-sandbox.sh postgres`.
+- _tester-redefined_: the tester's "end-to-end" gate was running `go test`
+  and reading source/DB state directly — a second unit/integration pass, not
+  an independent behavioral check (docs/adr/0011). Replaced with a black-box
+  k6 sandbox (`examples/k6/`) that runs the real compiled `examples/redis`/
+  `examples/postgres` binary against a real backend container and asserts
+  only on observed HTTP status codes. `tester.md` now has only `Bash`, no
+  `Read`/`Grep`/`Glob` (policy boundary, not a hard technical one). Q5, Q6,
+  and Q8 re-gated for real against the new sandbox after this landed — their
+  original go-test-based "e2e" passes did not count.
+- _q8_: `LockStore.Do` error contract ruled (ADR 0009) and implemented —
+  must propagate `fn`'s error unmodified or `%w`-wrapped (never
+  `%v`-flattened or swallowed); doc-only, TCK enforcement deferred until a
+  second `LockStore` exists (`tck.Run` only sees a `ProxyManager`, so it
+  can't plant the corrupt bytes needed to trip `fn`). Relaxing core's guard
+  to ignore `Do`'s return rejected: breaks on a store that retries `fn`
+  internally. `pgstore` already complies. Q9 unblocked. go.mod bumped to
+  1.26.5 (all four modules) to match the already-verified toolchain.

@@ -100,6 +100,12 @@ for range time.Tick(time.Minute) {
 `SKIP LOCKED` means the sweeper never blocks a live rate-limit check, and several replicas can
 run it concurrently without fighting.
 
+A read-only operation (`AvailableTokens`, `EstimateAbilityToConsume`) on a key that was never
+written stores nothing, so footprint tracks writes, not reads — `RemoveExpired` has nothing to
+reclaim from reads alone. A table written by a build predating AC-48 may still hold placeholder
+rows (`state IS NULL`, no `expires_at`) leaked by reads; `DELETE FROM bucket WHERE state IS NULL;`
+clears them.
+
 ## Server configuration
 
 Every rate-limit check is a short transaction holding one row lock, so the workload is many
