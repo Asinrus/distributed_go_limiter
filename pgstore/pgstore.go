@@ -76,9 +76,10 @@ func newStore(pool *pgxpool.Pool, c config) *Store {
 		pool: pool,
 		cfg:  c,
 		now:  func() int64 { return time.Now().UnixNano() },
-		// state may be NULL (placeholder row); expires_at NULL = no expiry.
+		// state may be NULL (a row leaked by a build predating AC-48); expires_at NULL
+		// = no expiry.
 		selectSQL: fmt.Sprintf(`SELECT %s, expires_at FROM %s WHERE %s = $1 FOR UPDATE`, st, t, id),
-		insertSQL: fmt.Sprintf(`INSERT INTO %s (%s, %s) VALUES ($1, NULL) ON CONFLICT (%s) DO NOTHING`, t, id, st, id),
+		insertSQL: fmt.Sprintf(`INSERT INTO %s (%s, %s, expires_at) VALUES ($1, $2, $3) ON CONFLICT (%s) DO NOTHING`, t, id, st, id),
 		updateSQL: fmt.Sprintf(`UPDATE %s SET %s = $1, expires_at = $2 WHERE %s = $3`, t, st, id),
 		deleteSQL: fmt.Sprintf(`DELETE FROM %s WHERE %s = $1`, t, id),
 	}
@@ -96,7 +97,7 @@ func (s *Store) Do(ctx context.Context, key string, ttl time.Duration,
 		if done {
 			return nil
 		}
-		// placeholder row was inserted; retry so it can be locked
+		// a concurrent writer created the row first; retry so it can be locked
 	}
 	return fmt.Errorf("pgstore: %q: exceeded retries acquiring row lock", key)
 }
@@ -117,23 +118,14 @@ func (s *Store) doOnce(ctx context.Context, key string, ttl time.Duration,
 	var state []byte
 	var expiresAt *int64
 	scanErr := tx.QueryRow(ctx, s.selectSQL, key).Scan(&state, &expiresAt)
-	if errors.Is(scanErr, pgx.ErrNoRows) {
-		// Row doesn't exist yet — insert a placeholder we can lock next round.
-		if _, err = tx.Exec(ctx, s.insertSQL, key); err != nil {
-			return false, err
-		}
-		if err = tx.Commit(ctx); err != nil {
-			return false, err
-		}
-		committed = true
-		return false, nil // retry in a fresh transaction
-	}
-	if scanErr != nil {
+	rowExists := !errors.Is(scanErr, pgx.ErrNoRows)
+	if rowExists && scanErr != nil {
 		return false, scanErr
 	}
 
-	// Treat an expired row as absent (fresh bucket).
-	found := state != nil
+	// found=false for a missing row, a leaked NULL-state row (predates AC-48), and an
+	// expired one.
+	found := rowExists && state != nil
 	if found && expiresAt != nil && *expiresAt <= s.now() {
 		found = false
 		state = nil
@@ -143,21 +135,41 @@ func (s *Store) doOnce(ctx context.Context, key string, ttl time.Duration,
 	if ferr != nil {
 		return false, ferr
 	}
-	if write {
-		var exp *int64
-		if ttl > 0 {
-			e := s.now() + ttl.Nanoseconds()
-			exp = &e
-		}
-		if _, err = tx.Exec(ctx, s.updateSQL, newState, exp, key); err != nil {
+	if !write {
+		// No statement, rollback releases the transaction. Nothing is persisted —
+		// parity with Redis/memstore on a read of an absent/found key.
+		return true, nil
+	}
+
+	if !rowExists {
+		tag, err := tx.Exec(ctx, s.insertSQL, key, newState, s.expiresAt(ttl))
+		if err != nil {
 			return false, err
 		}
+		if tag.RowsAffected() == 0 {
+			// Another writer created the key first; newState was derived from a state
+			// we never actually read, so it must be discarded. Retry: the next
+			// SELECT ... FOR UPDATE will find the row that writer created.
+			return false, nil
+		}
+	} else if _, err = tx.Exec(ctx, s.updateSQL, newState, s.expiresAt(ttl), key); err != nil {
+		return false, err
 	}
+
 	if err = tx.Commit(ctx); err != nil {
 		return false, err
 	}
 	committed = true
 	return true, nil
+}
+
+// expiresAt computes the expires_at value for a write: now()+ttl, or nil (no expiry).
+func (s *Store) expiresAt(ttl time.Duration) *int64 {
+	if ttl <= 0 {
+		return nil
+	}
+	e := s.now() + ttl.Nanoseconds()
+	return &e
 }
 
 func (s *Store) Remove(ctx context.Context, key string) error {

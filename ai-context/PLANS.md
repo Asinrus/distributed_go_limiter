@@ -15,7 +15,8 @@ Ratified decisions live in `docs/adr/` now, not here — see
 single-bandwidth v1 (0001), core stays protocol-agnostic (0002), Postgres
 SELECT-FOR-UPDATE over advisory locks (0003), TEXT bucket keys, no mapper
 (0004), LocalBucket mutex over lock-free CAS (0005), testcontainers for
-backend TCK (0006). Smaller settled facts that don't clear the ADR bar (module
+backend TCK (0006), pgstore identifiers are one quoted name (0008), pgstore
+creates no row for a read-only miss (0010). Smaller settled facts that don't clear the ADR bar (module
 path, Go toolchain installed by the user) aren't tracked anywhere formal —
 they're just true of the repo.
 
@@ -80,9 +81,11 @@ about each:
 - `ai-context/tasks/q5-pgstore-identifier-behavior-change.md` — **ruled**
   (ADR 0008): both behavior changes accepted as-is; `strings.Split` rejected.
   Follow-up doc/AC task done: `ai-context/done/pgstore-identifier-docs-and-ac47.md`.
-- `ai-context/tasks/q6-pgstore-read-only-row-leak.md` — pgstore leaks a
-  permanent placeholder row for read-only keys; Redis/memstore don't. Spec
-  gap, no AC covers storage footprint.
+- `ai-context/tasks/q6-pgstore-read-only-row-leak.md` — **ruled** (ADR 0010):
+  the insert moves inside the locking transaction and runs only when the
+  callback writes; both original candidates rejected. Implementation task:
+  `ai-context/tasks/pgstore-no-row-for-read-only-miss-ac48.md` (AC-48 =
+  storage footprint tracks writes, not reads).
 - `ai-context/tasks/q8-lockstore-do-error-contract.md` — ratify what
   `LockStore.Do` may do to the callback's error (doc-only vs. TCK-enforced).
 - `ai-context/tasks/q9-errstore-contract-ac.md` — assign an AC id to the
@@ -126,3 +129,9 @@ folded into `docs/adr/` (0001-0006) rather than repeated here.
   breaks `CREATE INDEX` naming and silently disables the `information_schema`
   BIGINT guard; `search_path` is the workaround). No SQL change; follow-up task
   covers the godoc/client-doc note and assigns AC-47 to identifier safety.
+- _q6_: pgstore read-only row leak ruled (ADR 0010) — placeholder insert stops
+  being committed up front; it moves inside the locking transaction and runs
+  only when the callback writes, so a read of an absent key persists nothing
+  (parity with Redis/memstore). Short-`expires_at` and existence-probe
+  candidates rejected. Follow-up task carries the code change, AC-48, and the
+  `state IS NULL` cleanup note for tables written by the old build.
