@@ -77,6 +77,43 @@ func TestPostgresExpiration(t *testing.T) {
 	assert.GreaterOrEqual(t, n, int64(1), "at least the expired row is swept")
 }
 
+// AC-48: a read-only operation on a key that was never written persists no row;
+// only a write creates one. No TTL configured — the ttl==0 case is where the old
+// placeholder leak was unbounded.
+func TestAC48_ReadOnlyMissPersistsNoRow(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	pm := pgstore.NewProxyManager(pool)
+	cfg := core.NewConfig(core.NewBandwidth(10).RefillGreedy(1, time.Hour))
+
+	b, err := pm.Bucket("ac48", cfg)
+	require.NoError(t, err)
+
+	av, err := b.AvailableTokens(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(10), av, "fresh bucket, full capacity")
+
+	probe, err := b.EstimateAbilityToConsume(ctx, 3)
+	require.NoError(t, err)
+	assert.True(t, probe.CanBeConsumed)
+	assert.Equal(t, int64(10), probe.RemainingTokens)
+
+	var n int
+	require.NoError(t, pool.QueryRow(ctx, `SELECT count(*) FROM bucket`).Scan(&n))
+	assert.Equal(t, 0, n, "read-only miss must not persist a row")
+
+	ok, err := b.TryConsume(ctx, 4)
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	require.NoError(t, pool.QueryRow(ctx, `SELECT count(*) FROM bucket`).Scan(&n))
+	assert.Equal(t, 1, n, "a write creates exactly one row")
+
+	av, err = b.AvailableTokens(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(6), av, "subsequent read reflects the consumption")
+}
+
 // Table/column names reach SQL by interpolation, not by bind parameter. They are
 // application config rather than end-user input, but a hostile identifier must be
 // escaped, never executed — and every interpolating statement must agree on the
