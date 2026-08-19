@@ -83,11 +83,14 @@ about each:
 - `ai-context/tasks/q6-pgstore-read-only-row-leak.md` — pgstore leaks a
   permanent placeholder row for read-only keys; Redis/memstore don't. Spec
   gap, no AC covers storage footprint.
-- `ai-context/tasks/q8-lockstore-do-error-contract.md` — ratify what
-  `LockStore.Do` may do to the callback's error (doc-only vs. TCK-enforced).
+- `ai-context/tasks/q8-lockstore-do-error-contract.md` — **ruled** (ADR 0009):
+  `Do` must return `fn`'s error unmodified or `%w`-wrapped, never replaced,
+  flattened, or swallowed. Doc-only; TCK enforcement deferred. Follow-up:
+  `ai-context/tasks/lockstore-do-godoc-contract.md`.
 - `ai-context/tasks/q9-errstore-contract-ac.md` — assign an AC id to the
   `ErrStore` contract the 8 tests in `core/storeerr_test.go` currently test
-  without one; blocked on Q8's ruling landing first.
+  without one; unblocked by Q8 — the decode-vs-outage clause stays a core
+  obligation, not a per-backend TCK one.
 
 Q1–Q4 and Q7 were already answered/retired before this session and are
 folded into `docs/adr/` (0001-0006) rather than repeated here.
@@ -126,3 +129,9 @@ folded into `docs/adr/` (0001-0006) rather than repeated here.
   breaks `CREATE INDEX` naming and silently disables the `information_schema`
   BIGINT guard; `search_path` is the workaround). No SQL change; follow-up task
   covers the godoc/client-doc note and assigns AC-47 to identifier safety.
+- _q8_: `LockStore.Do` error contract ruled (ADR 0009) — must propagate `fn`'s
+  error unmodified or `%w`-wrapped (never `%v`-flattened or swallowed); doc-only,
+  TCK enforcement deferred until a second `LockStore` exists (`tck.Run` only sees
+  a `ProxyManager`, so it can't plant the corrupt bytes needed to trip `fn`).
+  Relaxing core's guard to ignore `Do`'s return rejected: breaks on a store that
+  retries `fn` internally. `pgstore` already complies. Q9 unblocked.

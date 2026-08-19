@@ -30,6 +30,13 @@ type LockStore interface {
 	// state (found=false if absent) and returns the new bytes to persist with
 	// write=true, or write=false to leave the state unchanged. A positive ttl sets
 	// an expire-after-write on the persisted row.
+	//
+	// If fn returns an error, Do must abandon the write and return that error
+	// unmodified or wrapped with %w — never replaced, flattened with %v, or
+	// swallowed. The executor uses errors.Is on Do's return value to tell a
+	// callback failure (corrupt state) from a store outage; breaking the chain
+	// misreports the former as ErrStore, and returning nil turns a failed
+	// operation into a silent success.
 	Do(ctx context.Context, key string, ttl time.Duration,
 		fn func(old []byte, found bool) (newState []byte, write bool, err error)) error
 	// Remove deletes the key (no error if absent).
