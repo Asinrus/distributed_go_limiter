@@ -156,3 +156,12 @@ folded into `docs/adr/` (0001-0006) rather than repeated here.
   to ignore `Do`'s return rejected: breaks on a store that retries `fn`
   internally. `pgstore` already complies. Q9 unblocked. go.mod bumped to
   1.26.5 (all four modules) to match the already-verified toolchain.
+- _scope-mongo-etcd_: both new-backend tasks scoped for parallel dev —
+  `mongostore` as a `CASStore` over conditional `ReplaceOne` (`_id`=key,
+  `state` BinData, `expiresAt`; TTL index for reclamation only, expiry
+  enforced in the query predicate; `IndexModels`/`EnsureIndexes` as the
+  `SchemaSQL` analogue), `etcdstore` as a `CASStore` over `Txn` comparing
+  `clientv3.Value` — ModRevision rejected because `CASStore` passes bytes,
+  not a revision — with per-write leases as authoritative expiry and no
+  setup step. ADR 0012 records why two backends need an app-level expiry
+  check and two do not.
