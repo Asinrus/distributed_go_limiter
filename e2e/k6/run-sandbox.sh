@@ -6,10 +6,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+EXAMPLES_DIR="$SCRIPT_DIR/../../examples"
 
 BACKEND="${1:-}"
-if [[ -z "$BACKEND" || ! -f "$SCRIPT_DIR/../$BACKEND/docker-compose.yml" ]]; then
-  available="$(cd "$SCRIPT_DIR/.." && for d in */; do [[ -f "$d/docker-compose.yml" ]] && echo -n "${d%/} "; done)"
+if [[ -z "$BACKEND" || ! -f "$EXAMPLES_DIR/$BACKEND/docker-compose.yml" ]]; then
+  available="$(cd "$EXAMPLES_DIR" && for d in */; do [[ -f "$d/docker-compose.yml" ]] && echo -n "${d%/} "; done)"
   echo "usage: $0 <backend>  (available: $available)" >&2
   exit 1
 fi
@@ -25,7 +26,7 @@ if [[ -z "$DOCKER_BIN" ]]; then
   exit 1
 fi
 
-EXAMPLE_DIR="$SCRIPT_DIR/../$BACKEND"
+EXAMPLE_DIR="$EXAMPLES_DIR/$BACKEND"
 GO_LOG="$(mktemp)"
 GO_PID=""
 

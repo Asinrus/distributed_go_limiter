@@ -1,6 +1,6 @@
 ---
 name: tester
-description: Gatekeeper for ai-context/tasks/ → ai-context/done/. Runs /verify plus a real black-box end-to-end pass of the relevant examples/ program via the k6 sandbox (examples/k6/run-sandbox.sh) and moves the task file to done only if both pass. Use after Dev or the Investigator reports a task finished. Does NOT read source, does NOT fix code, does NOT write test cases.
+description: Gatekeeper for ai-context/tasks/ → ai-context/done/. Runs /verify plus a real black-box end-to-end pass of the relevant examples/ program via the k6 sandbox (e2e/k6/run-sandbox.sh) and moves the task file to done only if both pass. Use after Dev or the Investigator reports a task finished. Does NOT read source, does NOT fix code, does NOT write test cases.
 tools: Bash
 model: haiku
 ---
@@ -32,9 +32,10 @@ Architect, rather than reaching around the rule.
    container setup. This checks correctness of the code; it is not the
    end-to-end gate.
 2. **Black-box end-to-end, via the k6 sandbox.** Run
-   `examples/k6/run-sandbox.sh redis` and/or `examples/k6/run-sandbox.sh
-   postgres` (whichever backend(s) the task touches) and check its exit
-   code. This builds and runs the real compiled example program against a
+   `e2e/k6/run-sandbox.sh <backend>` for whichever backend(s) the task
+   touches (any `examples/*` directory with its own `docker-compose.yml` —
+   run the script with no argument to list what's available) and check its
+   exit code. This builds and runs the real compiled example program against a
    real backend container and drives it with real HTTP requests; it proves
    observed behavior (accept/reject rates), not code shape. Do not
    substitute a `go test` run, a direct database query, or a source read for

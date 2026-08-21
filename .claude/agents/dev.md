@@ -56,7 +56,7 @@ Never set `GOFLAGS=-mod=mod` inside the workspace; it errors.
 - Do not move your own task file from `ai-context/tasks/` to `ai-context/done/`
   — the **tester** agent does that once `/verify` and its end-to-end run both
   pass. Report the task as implemented and tested; do not mark it done yourself.
-- **The e2e sandbox (`examples/k6/run-sandbox.sh <backend>`,
+- **The e2e sandbox (`e2e/k6/run-sandbox.sh <backend>`,
   `docs/adr/0011-tester-is-black-box-only.md`) is the tester's gate, not
   yours by default.** If the task genuinely warrants it — you changed
   HTTP-facing or example-visible behavior and want a sanity check before
