@@ -30,12 +30,15 @@ they're just true of the repo.
 | 4 | core: Store/ProxyManager/command/codec/memstore + TCK | ✅ done | AC-41..44 via in-memory; codec + AC-45 TTL |
 | 5 | redis backend + testcontainers TCK | ✅ verified | Lua CAS + SetNX; TCK + AC-45 green on real Redis |
 | 6 | postgres backend + testcontainers TCK | ✅ verified | SELECT FOR UPDATE; TCK + AC-45/RemoveExpired green on real Postgres |
+| 7 | mongodb backend + testcontainers TCK | ✅ verified | conditional `ReplaceOne` CAS; TTL index reclaims only, expiry in predicate; TCK green + k6 sandbox `mongodb` |
+| 8 | etcd backend + testcontainers TCK | ✅ verified | `Txn` on `clientv3.Value`; per-write leases as expiry, no setup step; TCK green + k6 sandbox `etcd` |
 
 ## Verification — DONE (Go 1.26.5, podman/testcontainers)
 All green:
 - `core`: `go vet` clean; `go test -race ./...` PASS (AC-11..46 incl. concurrency, blocking, in-memory TCK).
 - `redisstore`: TCK AC-41..44 + AC-45 expiration PASS on `redis:7-alpine`.
 - `pgstore`: TCK AC-41..44 + AC-45 + RemoveExpired PASS on `postgres:16-alpine`.
+- `mongostore`, `etcdstore`: TCK + AC-45 expiration PASS on real containers.
 
 One defect found & fixed during verification (impl-level, no problem_report needed):
 `testcontainers.TerminateContainer` doesn't exist in v0.33.0 → switched both backend
@@ -165,3 +168,8 @@ folded into `docs/adr/` (0001-0006) rather than repeated here.
   not a revision — with per-write leases as authoritative expiry and no
   setup step. ADR 0012 records why two backends need an app-level expiry
   check and two do not.
+- _mongo-etcd-done_: both backends implemented and gated — `mongostore` and
+  `etcdstore` pass the TCK against real containers and the black-box k6
+  sandbox (`examples/k6/run-sandbox.sh mongodb|etcd`); tasks moved to
+  `ai-context/done/`. Client docs: `docs/client/mongodb.md`, `docs/client/etcd.md`.
+  Remaining new-backend backlog: `ai-context/tasks/vendor-hazelcast-store.md`.
