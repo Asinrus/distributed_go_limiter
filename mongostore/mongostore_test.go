@@ -2,6 +2,9 @@ package mongostore_test
 
 import (
 	"context"
+	"flag"
+	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -16,26 +19,64 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+// mongoColl is shared by every test in this file: one container for the
+// whole package rather than one per test. Tests stay isolated by using
+// distinct document keys (core/tck generates its own; the rest use fixed,
+// non-overlapping names), so a shared collection never leaks state between
+// tests.
+var mongoColl *mongo.Collection
+
+// TestMain starts a single MongoDB container for the package (skipped in
+// -short mode, same as every other backend's container tests) and tears it
+// down after all tests finish.
+func TestMain(m *testing.M) {
+	flag.Parse()
+	if testing.Short() {
+		os.Exit(m.Run())
+	}
+
+	ctx := context.Background()
+
+	ctr, err := tcmongodb.Run(ctx, "mongo:7")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "mongostore: start container:", err)
+		os.Exit(1)
+	}
+
+	uri, err := ctr.ConnectionString(ctx)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "mongostore: connection string:", err)
+		os.Exit(1)
+	}
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "mongostore: connect client:", err)
+		os.Exit(1)
+	}
+	if err := client.Ping(ctx, nil); err != nil {
+		fmt.Fprintln(os.Stderr, "mongostore: ping:", err)
+		os.Exit(1)
+	}
+
+	mongoColl = client.Database("test").Collection("bucket")
+	if err := mongostore.EnsureIndexes(ctx, mongoColl); err != nil {
+		fmt.Fprintln(os.Stderr, "mongostore: ensure indexes:", err)
+		os.Exit(1)
+	}
+
+	code := m.Run()
+
+	_ = client.Disconnect(ctx)
+	_ = ctr.Terminate(ctx)
+	os.Exit(code)
+}
+
 func startMongo(t *testing.T) *mongo.Collection {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("skipping container test in -short mode")
 	}
-	ctx := context.Background()
-	ctr, err := tcmongodb.Run(ctx, "mongo:7")
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = ctr.Terminate(ctx) })
-
-	uri, err := ctr.ConnectionString(ctx)
-	require.NoError(t, err)
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = client.Disconnect(ctx) })
-	require.NoError(t, client.Ping(ctx, nil))
-
-	coll := client.Database("test").Collection("bucket")
-	require.NoError(t, mongostore.EnsureIndexes(ctx, coll))
-	return coll
+	return mongoColl
 }
 
 // AC-41..44 on real MongoDB — the same suite the in-memory, Redis and Postgres
