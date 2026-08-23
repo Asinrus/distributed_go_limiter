@@ -6,8 +6,8 @@ pm := etcdstore.NewProxyManager(cli, etcdstore.WithTTL(time.Hour))
 ```
 
 That is the entire etcd-specific surface. Everything after it — `pm.Bucket(key, cfg)`,
-`b.TryConsume(ctx, 1)` — is the same `core.ProxyManager` API the Redis and Postgres backends
-use, and the same one `core.NewInMemoryProxyManager()` gives you with no container at all.
+`b.TryConsume(ctx, 1)` — is the same `core.ProxyManager` API every backend uses, including
+`core.NewInMemoryProxyManager()` with no container at all.
 
 ## Options
 
@@ -18,8 +18,8 @@ use, and the same one `core.NewInMemoryProxyManager()` gives you with no contain
 
 ## `WithTTL` is the whole cleanup story
 
-etcd deletes the key itself when its lease expires, so unlike Postgres there is nothing to
-sweep — see `docs/adr/0012-ttl-is-not-a-correctness-mechanism.md`. Every successful write
+etcd deletes the key itself when its lease expires, so there is nothing to sweep — see
+`docs/adr/0012-ttl-is-not-a-correctness-mechanism.md`. Every successful write
 grants a fresh lease and attaches it to that write (never `KeepAlive`, which would make state
 immortal); the lease displaced by an overwrite is left to expire on its own.
 
@@ -32,8 +32,9 @@ Without a TTL, every client you ever rate-limited stays in etcd forever.
 
 ## What is stored
 
-25 bytes per bucket — a version byte plus three big-endian int64s. The token maths runs in
-`core`, never in etcd; etcd provides only atomic get and a compare-and-put (`Txn`).
+25 bytes per bucket — a version byte plus three big-endian int64s, `core`'s fixed wire format
+(same across every backend; see `core/codec.go`). The token maths runs in `core`, never in
+etcd; etcd provides only atomic get and a compare-and-put (`Txn`).
 
 ```console
 $ etcdctl get --prefix ""

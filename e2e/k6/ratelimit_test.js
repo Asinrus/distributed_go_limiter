@@ -1,5 +1,5 @@
 import http from 'k6/http';
-import { check } from 'k6';
+import { check, sleep } from 'k6';
 import { Counter } from 'k6/metrics';
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
@@ -11,7 +11,8 @@ export const rejected_total = new Counter('rejected_total');
 // refilling 5 tokens/min greedy (1 token per 12s) — see examples/*/main.go.
 export const options = {
   scenarios: {
-    // Drains the bucket: 8 requests against a capacity of 5.
+    // Fully self-contained: fires 8 requests cold and asserts the burst
+    // limit. Assumes nothing about any other scenario.
     burst: {
       executor: 'shared-iterations',
       exec: 'burst',
@@ -19,27 +20,31 @@ export const options = {
       iterations: 8,
       maxDuration: '30s',
     },
-    // Runs after enough wall-clock time has passed for one token to refill
-    // (burst itself finishes in well under a second, so startTime is really
-    // "time since the bucket was drained" plus a safety margin over the 12s
-    // refill period). First request should get the refilled token, the
-    // second should find the bucket empty again.
+    // Also fully self-contained: drains the bucket itself first (its own
+    // "activity"), then waits past one refill period, then asserts the
+    // refilled token is served and the bucket is empty again right after.
+    // Does not assume burst ran, ran first, or left the bucket in any
+    // particular state -- if this scenario were the only one in the file,
+    // it would still pass. startTime only avoids running concurrently
+    // against burst's shared bucket (same source IP); it is a scheduling
+    // necessity, not a logical dependency on burst's outcome.
     refill: {
       executor: 'shared-iterations',
       exec: 'refill',
       vus: 1,
-      iterations: 2,
-      startTime: '15s',
-      maxDuration: '10s',
+      iterations: 1,
+      startTime: '30s',
+      maxDuration: '30s',
     },
   },
   thresholds: {
-    accepted_total: ['count==6'],
-    rejected_total: ['count==4'],
+    accepted_total: ['count==5'],
+    rejected_total: ['count==3'],
+    'checks{scenario:refill}': ['rate==1'],
   },
 };
 
-function hit() {
+export function burst() {
   const res = http.get(`${BASE_URL}/`);
   check(res, {
     'status is 200 or 429': (r) => r.status === 200 || r.status === 429,
@@ -51,10 +56,20 @@ function hit() {
   }
 }
 
-export function burst() {
-  hit();
-}
-
 export function refill() {
-  hit();
+  // Drain the bucket ourselves first -- capacity is 5, so 5 requests
+  // guarantee an empty bucket regardless of starting state. Outcomes here
+  // aren't asserted: the starting fullness is unknown by design, since this
+  // scenario doesn't assume burst (or anything else) already ran.
+  for (let i = 0; i < 5; i++) {
+    http.get(`${BASE_URL}/`);
+  }
+
+  sleep(15); // past one refill period (12s) + margin
+
+  const refilled = http.get(`${BASE_URL}/`);
+  check(refilled, { 'refilled token is accepted': (r) => r.status === 200 });
+
+  const emptyAgain = http.get(`${BASE_URL}/`);
+  check(emptyAgain, { 'bucket empty again right after': (r) => r.status === 429 });
 }

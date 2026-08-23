@@ -7,8 +7,8 @@ pm := mongostore.NewProxyManager(coll, mongostore.WithTTL(time.Hour))
 ```
 
 That is the entire MongoDB-specific surface. Everything after it — `pm.Bucket(key, cfg)`,
-`b.TryConsume(ctx, 1)` — is the same `core.ProxyManager` API the Redis and Postgres backends
-use, and the same one `core.NewInMemoryProxyManager()` gives you with no container at all.
+`b.TryConsume(ctx, 1)` — is the same `core.ProxyManager` API every backend uses, including
+`core.NewInMemoryProxyManager()` with no container at all.
 
 ## Options
 
@@ -27,8 +27,9 @@ One document per bucket:
 { "_id": "<bucket key>", "state": BinData(0, "..."), "expiresAt": ISODate("...") }
 ```
 
-`state` is 25 bytes — a version byte plus three big-endian int64s. The token maths runs in
-`core`; MongoDB provides only the conditional replace (`ReplaceOne` with a filter on `_id`
+`state` is 25 bytes — a version byte plus three big-endian int64s, `core`'s fixed wire format
+(same across every backend; see `core/codec.go`). The token maths runs in `core`; MongoDB
+provides only the conditional replace (`ReplaceOne` with a filter on `_id`
 and, for a CAS, the previous `state`). `expiresAt` is absent, not null, when the document has
 no expiry.
 
