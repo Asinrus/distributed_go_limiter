@@ -86,14 +86,7 @@ func (s *Store) CompareAndSwap(ctx context.Context, key string, old, newState []
 	if err != nil {
 		if upsert && mongo.IsDuplicateKeyError(err) {
 			// Another writer won the create race between our filter match and
-			// the upsert: MongoDB rejected the insert because a document with
-			// this _id now exists, so nothing was written by us here — the
-			// winner's document is untouched. Returning false (not the error)
-			// is what makes this safe: it tells casRunner.execute (core/command.go)
-			// this was a lost compare-and-swap, not a store failure, so it
-			// re-reads state and retries with the winner's value as the new
-			// base. This method has no state to lose; the retry loop is the
-			// caller's responsibility, by design.
+			// the upsert — not an error, just a lost CAS.
 			return false, nil
 		}
 		return false, fmt.Errorf("mongostore: cas %q: %w", key, err)
