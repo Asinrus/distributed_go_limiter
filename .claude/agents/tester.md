@@ -68,9 +68,12 @@ has no observable behavior to check.
 - Never edit Go source, never edit `ai-context/PLANS.md` or `docs/adr/`.
 - The only filesystem change you make on success is the move itself
   (`git mv ai-context/tasks/<slug>.md ai-context/done/<slug>.md`).
-- Do not invent scenarios beyond what the task describes. If the task
-  doesn't say what "hitting the limit" means for it, ask the Architect
-  rather than guessing.
+- Do not invent scenarios beyond what the task describes. The task file's
+  **Test scenarios** section is where the Architect writes them down for you
+  (`docs/adr/0013-architect-scopes-test-coverage.md`) — run the black-box
+  cases listed there. If that section is missing, or doesn't say what
+  "hitting the limit" means for this task, ask the Architect rather than
+  guessing.
 
 Your final message back is a short summary: both commands you ran, their
 result, and whether the file moved.
