@@ -16,7 +16,9 @@ single-bandwidth v1 (0001), core stays protocol-agnostic (0002), Postgres
 SELECT-FOR-UPDATE over advisory locks (0003), TEXT bucket keys, no mapper
 (0004), LocalBucket mutex over lock-free CAS (0005), testcontainers for
 backend TCK (0006), pgstore identifiers are one quoted name (0008), pgstore
-creates no row for a read-only miss (0010). Smaller settled facts that don't clear the ADR bar (module
+creates no row for a read-only miss (0010), tester is black-box only (0011),
+TTL is not a correctness mechanism (0012), Architect scopes a task's test
+coverage (0013). Smaller settled facts that don't clear the ADR bar (module
 path, Go toolchain installed by the user) aren't tracked anywhere formal —
 they're just true of the repo.
 
@@ -98,6 +100,10 @@ about each:
   without one; unblocked by Q8 — the decode-vs-outage clause stays a core
   obligation, not a per-backend TCK one.
 
+- `ai-context/tasks/plans-md-vs-changelog.md` — **deferred, unruled**: whether
+  this file survives as a tracker or becomes a versioned changelog now that
+  `tasks/`/`done/` carry work status (raised in PR #7 review).
+
 Q1–Q4 and Q7 were already answered/retired before this session and are
 folded into `docs/adr/` (0001-0006) rather than repeated here.
 
@@ -173,3 +179,12 @@ folded into `docs/adr/` (0001-0006) rather than repeated here.
   sandbox (`examples/k6/run-sandbox.sh mongodb|etcd`); tasks moved to
   `ai-context/done/`. Client docs: `docs/client/mongodb.md`, `docs/client/etcd.md`.
   Remaining new-backend backlog: `ai-context/tasks/vendor-hazelcast-store.md`.
+- _pr7-process_: task files now require a **Test scenarios** section written by
+  the Architect — black-box cases for the tester, unit/integration cases for
+  Dev, so the two stop deriving coverage independently (ADR 0013; convention in
+  `ai-context/tasks/README.md`, pointers added to all three agent files).
+  Letting the tester author its own scenarios rejected (no `Read` tools per ADR
+  0011, and a scenario invented by the run that grades it isn't independent).
+  Whether `PLANS.md` should become a versioned changelog is deferred, not
+  answered — captured as `ai-context/tasks/plans-md-vs-changelog.md`. ADR 0011's
+  k6 path corrected to `e2e/k6/` after the sandbox moved out of `examples/`.
