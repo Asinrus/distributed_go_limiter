@@ -45,6 +45,12 @@ func TestMain(m *testing.M) {
 			"etcd",
 			"--listen-client-urls", "http://0.0.0.0:2379",
 			"--advertise-client-urls", "http://0.0.0.0:2379",
+			// Lower than etcd's defaults (1000ms/100ms) to shrink the
+			// server-enforced minimum lease TTL, so TestEtcdExpiration
+			// doesn't have to sleep past the default ~3s floor. See the
+			// comment on that sleep for what this buys.
+			"--election-timeout", "250",
+			"--heartbeat-interval", "50",
 		},
 		// SkipInternalCheck: podman's rootless socket rejects the exec-based
 		// internal probe testcontainers otherwise runs first.
@@ -116,10 +122,14 @@ func TestEtcdExpiration(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(6), av)
 
-	// etcd enforces a server-side minimum lease TTL (~3x its election timeout,
-	// regardless of the seconds requested via Grant), so wait past that rather
-	// than the requested 1s.
-	time.Sleep(4 * time.Second)
+	// etcd enforces a server-side minimum lease TTL (~3x its election
+	// timeout, regardless of the seconds requested via Grant), so wait past
+	// that rather than the requested 1s. startEtcd's container runs with a
+	// lowered election-timeout/heartbeat-interval to shrink that floor;
+	// measured lease expiry against it lands around 1.3-1.5s, so 3s leaves a
+	// comfortable margin without reintroducing the ~3-4s a default-timeout
+	// cluster would need.
+	time.Sleep(3 * time.Second)
 
 	av, err = b.AvailableTokens(ctx)
 	require.NoError(t, err)
