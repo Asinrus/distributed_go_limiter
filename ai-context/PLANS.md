@@ -16,7 +16,9 @@ single-bandwidth v1 (0001), core stays protocol-agnostic (0002), Postgres
 SELECT-FOR-UPDATE over advisory locks (0003), TEXT bucket keys, no mapper
 (0004), LocalBucket mutex over lock-free CAS (0005), testcontainers for
 backend TCK (0006), pgstore identifiers are one quoted name (0008), pgstore
-creates no row for a read-only miss (0010). Smaller settled facts that don't clear the ADR bar (module
+creates no row for a read-only miss (0010), tester is black-box only (0011),
+TTL is not a correctness mechanism (0012), Architect scopes a task's test
+coverage (0013). Smaller settled facts that don't clear the ADR bar (module
 path, Go toolchain installed by the user) aren't tracked anywhere formal —
 they're just true of the repo.
 
@@ -30,12 +32,15 @@ they're just true of the repo.
 | 4 | core: Store/ProxyManager/command/codec/memstore + TCK | ✅ done | AC-41..44 via in-memory; codec + AC-45 TTL |
 | 5 | redis backend + testcontainers TCK | ✅ verified | Lua CAS + SetNX; TCK + AC-45 green on real Redis |
 | 6 | postgres backend + testcontainers TCK | ✅ verified | SELECT FOR UPDATE; TCK + AC-45/RemoveExpired green on real Postgres |
+| 7 | mongodb backend + testcontainers TCK | ✅ verified | conditional `ReplaceOne` CAS; TTL index reclaims only, expiry in predicate; TCK green + k6 sandbox `mongodb` |
+| 8 | etcd backend + testcontainers TCK | ✅ verified | `Txn` on `clientv3.Value`; per-write leases as expiry, no setup step; TCK green + k6 sandbox `etcd` |
 
 ## Verification — DONE (Go 1.26.5, podman/testcontainers)
 All green:
 - `core`: `go vet` clean; `go test -race ./...` PASS (AC-11..46 incl. concurrency, blocking, in-memory TCK).
 - `redisstore`: TCK AC-41..44 + AC-45 expiration PASS on `redis:7-alpine`.
 - `pgstore`: TCK AC-41..44 + AC-45 + RemoveExpired PASS on `postgres:16-alpine`.
+- `mongostore`, `etcdstore`: TCK + AC-45 expiration PASS on real containers.
 
 One defect found & fixed during verification (impl-level, no problem_report needed):
 `testcontainers.TerminateContainer` doesn't exist in v0.33.0 → switched both backend
@@ -94,6 +99,10 @@ about each:
   `ErrStore` contract the 8 tests in `core/storeerr_test.go` currently test
   without one; unblocked by Q8 — the decode-vs-outage clause stays a core
   obligation, not a per-backend TCK one.
+
+- `ai-context/tasks/plans-md-vs-changelog.md` — **deferred, unruled**: whether
+  this file survives as a tracker or becomes a versioned changelog now that
+  `tasks/`/`done/` carry work status (raised in PR #7 review).
 
 Q1–Q4 and Q7 were already answered/retired before this session and are
 folded into `docs/adr/` (0001-0006) rather than repeated here.
@@ -156,3 +165,26 @@ folded into `docs/adr/` (0001-0006) rather than repeated here.
   to ignore `Do`'s return rejected: breaks on a store that retries `fn`
   internally. `pgstore` already complies. Q9 unblocked. go.mod bumped to
   1.26.5 (all four modules) to match the already-verified toolchain.
+- _scope-mongo-etcd_: both new-backend tasks scoped for parallel dev —
+  `mongostore` as a `CASStore` over conditional `ReplaceOne` (`_id`=key,
+  `state` BinData, `expiresAt`; TTL index for reclamation only, expiry
+  enforced in the query predicate; `IndexModels`/`EnsureIndexes` as the
+  `SchemaSQL` analogue), `etcdstore` as a `CASStore` over `Txn` comparing
+  `clientv3.Value` — ModRevision rejected because `CASStore` passes bytes,
+  not a revision — with per-write leases as authoritative expiry and no
+  setup step. ADR 0012 records why two backends need an app-level expiry
+  check and two do not.
+- _mongo-etcd-done_: both backends implemented and gated — `mongostore` and
+  `etcdstore` pass the TCK against real containers and the black-box k6
+  sandbox (`examples/k6/run-sandbox.sh mongodb|etcd`); tasks moved to
+  `ai-context/done/`. Client docs: `docs/client/mongodb.md`, `docs/client/etcd.md`.
+  Remaining new-backend backlog: `ai-context/tasks/vendor-hazelcast-store.md`.
+- _pr7-process_: task files now require a **Test scenarios** section written by
+  the Architect — black-box cases for the tester, unit/integration cases for
+  Dev, so the two stop deriving coverage independently (ADR 0013; convention in
+  `ai-context/tasks/README.md`, pointers added to all three agent files).
+  Letting the tester author its own scenarios rejected (no `Read` tools per ADR
+  0011, and a scenario invented by the run that grades it isn't independent).
+  Whether `PLANS.md` should become a versioned changelog is deferred, not
+  answered — captured as `ai-context/tasks/plans-md-vs-changelog.md`. ADR 0011's
+  k6 path corrected to `e2e/k6/` after the sandbox moved out of `examples/`.

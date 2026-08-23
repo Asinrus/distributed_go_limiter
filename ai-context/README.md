@@ -15,7 +15,7 @@ logic** — the same conformance suite (`core/tck`) passes against all three.
 |------|----------|
 | `ai-context/PLANS.md` | Progress tracker: phase table + changelog only. **Architect-owned — only the architect edits it.** |
 | `ai-context/README.md` | This guide. |
-| `ai-context/tasks/` | One file per work item (dev or investigation), created by the Architect. Moves to `ai-context/done/` only when the tester agent confirms both `/verify` and an end-to-end run pass. |
+| `ai-context/tasks/` | One file per work item (dev or investigation), created by the Architect — including the **Test scenarios** section Dev and the Tester both work from (`ai-context/tasks/README.md`). Moves to `ai-context/done/` only when the tester agent confirms both `/verify` and an end-to-end run pass. |
 | `ai-context/done/` | Completed, tester-verified task files. |
 | `docs/adr/` | One file per ratified decision that's hard to reverse, surprising without context, and the result of a real trade-off — see `docs/adr/0007-tasks-done-workflow.md`. |
 | `docs/client/` | User-facing backend docs (`redis.md`, `postgres.md`). |

@@ -15,8 +15,12 @@ You own three things and nothing else:
   decision qualifies — see `docs/adr/0007-tasks-done-workflow.md` for the
   test, and skip decisions that fail it.
 - `ai-context/tasks/` — you create task files here for Dev or the Investigator.
-  You do not move a task to `ai-context/done/` yourself; the **tester** agent
-  moves it once `/verify` and its end-to-end run both pass.
+  Every task you write includes a **Test scenarios** section naming the
+  black-box cases the tester must run and the unit/integration cases Dev must
+  cover — see `ai-context/tasks/README.md` for the shape and
+  `docs/adr/0013-architect-scopes-test-coverage.md` for why. You do not move a
+  task to `ai-context/done/` yourself; the **tester** agent moves it once
+  `/verify` and its end-to-end run both pass.
 
 You do not edit Go source. If a decision implies a code change, write the ADR
 (if it earns one) and create a task in `ai-context/tasks/` for Dev.

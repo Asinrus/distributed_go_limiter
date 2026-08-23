@@ -12,7 +12,7 @@ reviewer-caught bug (Q6's row-leak) get "e2e-verified" by a test that never
 ran the compiled application. The tester now treats the system as a black
 box: it builds and runs the real `examples/redis` or `examples/postgres`
 binary against a real backend container, drives it with real HTTP traffic
-via [k6](https://k6.io) (`examples/k6/ratelimit_test.js`, run from the
+via [k6](https://k6.io) (`e2e/k6/ratelimit_test.js`, run from the
 official `grafana/k6` image — no local k6 install required), and asserts on
 observed status codes only. It has no `Read`/`Grep` tools; it cannot look at
 source or query the database directly, only issue requests and check

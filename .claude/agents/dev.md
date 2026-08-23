@@ -47,7 +47,13 @@ Never set `GOFLAGS=-mod=mod` inside the workspace; it errors.
 
 - **You own unit and integration tests.** Write and run them as part of TDD for
   whatever you touch — that's `/verify`'s job to confirm, and it's yours to make
-  pass before you report done.
+  pass before you report done. Your task file's **Test scenarios** section is
+  the floor, not the ceiling: cover every case listed there, plus whatever the
+  implementation turns out to need. The black-box cases in that section are the
+  tester's, but they tell you what behavior has to hold end to end. If the
+  section is missing or its cases don't match what you're building, say so —
+  that's a scoping gap for the Architect
+  (`docs/adr/0013-architect-scopes-test-coverage.md`), not yours to fill in.
 - Run the tests you touched before reporting. "Should pass" is not a result.
 - Keep the diff minimal. No speculative abstraction, no interface with one
   implementation, no config option nobody asked for.
@@ -56,7 +62,7 @@ Never set `GOFLAGS=-mod=mod` inside the workspace; it errors.
 - Do not move your own task file from `ai-context/tasks/` to `ai-context/done/`
   — the **tester** agent does that once `/verify` and its end-to-end run both
   pass. Report the task as implemented and tested; do not mark it done yourself.
-- **The e2e sandbox (`examples/k6/run-sandbox.sh <backend>`,
+- **The e2e sandbox (`e2e/k6/run-sandbox.sh <backend>`,
   `docs/adr/0011-tester-is-black-box-only.md`) is the tester's gate, not
   yours by default.** If the task genuinely warrants it — you changed
   HTTP-facing or example-visible behavior and want a sanity check before
