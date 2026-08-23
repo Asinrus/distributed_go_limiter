@@ -58,11 +58,12 @@ func (s *store) CompareAndSwap(ctx context.Context, key string, old, newState []
 	return resp.Succeeded, nil
 }
 
-// putOpts grants a fresh lease for ttl > 0. etcd's lease granularity is whole
-// seconds with a minimum of 1, so sub-second TTLs round up. The lease is never
-// kept alive: expire-after-write means each write attaches its own lease, and
-// the lease displaced by an overwrite is left to expire on its own rather than
-// revoked explicitly.
+// putOpts grants a fresh lease for ttl > 0. A lease is etcd's server-side TTL
+// handle: every key attached to it is deleted when the lease expires. etcd's
+// lease granularity is whole seconds with a minimum of 1, so sub-second TTLs
+// round up. The lease is never kept alive: expire-after-write means each
+// write attaches its own lease, and the lease displaced by an overwrite is
+// left to expire on its own rather than revoked explicitly.
 func (s *store) putOpts(ctx context.Context, ttl time.Duration) ([]clientv3.OpOption, error) {
 	if ttl <= 0 {
 		return nil, nil
