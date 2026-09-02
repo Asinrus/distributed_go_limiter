@@ -188,3 +188,45 @@ folded into `docs/adr/` (0001-0006) rather than repeated here.
   Whether `PLANS.md` should become a versioned changelog is deferred, not
   answered — captured as `ai-context/tasks/plans-md-vs-changelog.md`. ADR 0011's
   k6 path corrected to `e2e/k6/` after the sandbox moved out of `examples/`.
+- _roadmap_: three read-only audits (code, docs, ecosystem) against 5f45eb8
+  landed as task files, ranked in `ai-context/tasks/next-roadmap.md` — that
+  file, not this one, is now where "what is queued" is read. Two rulings
+  recorded: Go 1.23 becomes the single project version (a separate dev pin
+  rejected; the highest dependency-forced floor is `etcdstore` at go1.22, and
+  the earlier "1.24" figure was a `go.work` measurement artifact), and CI moves
+  to GitHub Actions with no test changes (runner Docker satisfies
+  testcontainers; a rewrite onto GHA `services:` rejected as unnecessary). Both
+  ADRs are written when the changes are applied, not now. Four tier-1
+  correctness items scoped as their own files (`initialTokens` validation, etcd
+  lease leak, CAS retry hardening, ctx cancellation); nothing implemented this
+  round. Whether this file survives as a tracker remains open
+  (`ai-context/tasks/plans-md-vs-changelog.md`) — this entry follows the
+  established format and does not prejudge that ruling.
+- _roadmap-review_: independent architect review of the above before commit.
+  AC ids pinned rather than left to pickup — **AC-49** `initialTokens`
+  validation, **AC-50** ctx cancellation on the distributed path, and *no* id
+  for CAS retry pacing (implementation property; the exhaustion contract stays
+  with `ai-context/tasks/q9-errstore-contract-ac.md`), since three files all
+  claiming "the next free id" collide when two are worked in parallel. Two
+  corrections: the etcd lease behavior is not merely undocumented but
+  contradicted (`docs/client/etcd.md:22` says "successful write"; the grant is
+  per attempt), and the ctx task's black-box surface exists but is a race the
+  sandbox cannot control — reason restated, scenario still declined.
+- _roadmap-reranked_: the repo owner answered the four direction questions and
+  `ai-context/tasks/next-roadmap.md` was re-ranked against them. This is a
+  **portfolio / reference implementation**, not a near-term release, so
+  `publish-v0.1.0.md` is dormant (kept: the `replace` + `require core v0.0.0`
+  trap is invisible under `go.work` and would break the first outside
+  `go get`). **Cheap pluggability is the product**, so widening the TCK and
+  forwarding `core.ProxyOption` from every backend move to tier 1, and `core`
+  stays vendor-agnostic — round-trip reduction belongs in the command layer
+  (new row 19, unscoped). **Multi-bandwidth is planned for v0.2**, so the
+  config fingerprint folded into one future codec-format change (row 17) with
+  a prerequisite row 18: state that the codec byte layout is unstable before
+  v1.0 *before* breaking it. `examples/` are demos users will copy, so the
+  error-body IP leak and missing `Retry-After` move to tier 2. Row numbers are
+  now stable ids, not positions — the Tier column carries the ranking, so a
+  re-rank stops invalidating every "row N" cross-reference. The Go-version and
+  CI files had their "Ruling (repo owner)" headers corrected to separate the
+  owner's direction (one version; yes to GitHub CI) from the Architect's
+  derivation (1.23 from the measured floors; the job design).
