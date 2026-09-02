@@ -33,10 +33,11 @@ func storeErr(ctx context.Context, err error) error {
 
 // maxCASRetries bounds both the number of store round trips and, now that losing
 // attempts back off, the wall-clock cost of a call that is ultimately rejected.
-// With backoffBase doubling up to backoffCap, the worst case is
-// maxCASRetries*backoffCap = 16*32ms = 512ms of sleep plus 16 GetState/CompareAndSwap
-// round trips — an acceptable budget for a synchronous decision that would
-// otherwise spin at wire speed, dropped from the prior 100 immediate attempts.
+// The loop backs off before every retry but the first, so the worst case is
+// (maxCASRetries-1)*backoffCap = 15*32ms = 480ms of sleep plus 16
+// GetState/CompareAndSwap round trips — an acceptable budget for a synchronous
+// decision that would otherwise spin at wire speed, dropped from the prior 100
+// immediate attempts.
 const maxCASRetries = 16
 
 const (

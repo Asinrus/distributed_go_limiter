@@ -12,7 +12,14 @@ import (
 // No AC id: retry pacing is an implementation property, not a behavioral
 // criterion (ai-context/tasks/core-cas-retry-hardening.md). These are white-box
 // so they can reach maxCASRetries/casBackoff/casRunner directly and assert
-// pacing through the injected core.WithCASBackoff hook instead of sleeping.
+// pacing through an injected sleep instead of sleeping for real.
+
+// withSleep overrides casRunner's backoff delay. Test-only: unlike WithClock,
+// this has no legitimate caller-facing use (backoff pacing isn't part of the
+// contract), so it stays an unexported ProxyOption instead of public API.
+func withSleep(sleep func(context.Context, time.Duration) error) ProxyOption {
+	return func(c *proxyConfig) { c.sleep = sleep }
+}
 
 func backoffTestConfig() Config {
 	return NewConfig(NewBandwidth(10).RefillGreedy(1, time.Second))
@@ -94,7 +101,7 @@ func (s *sleepSpy) sleep(_ context.Context, d time.Duration) error {
 
 func TestCASBackoff_ExhaustionMakesExactlyMaxRetriesAttempts(t *testing.T) {
 	store := &countingLoserStore{}
-	pm := NewCASProxyManager(store, WithCASBackoff(func(context.Context, time.Duration) error { return nil }))
+	pm := NewCASProxyManager(store, withSleep(func(context.Context, time.Duration) error { return nil }))
 	b, err := pm.Bucket("k", backoffTestConfig())
 	if err != nil {
 		t.Fatal(err)
@@ -115,7 +122,7 @@ func TestCASBackoff_ExhaustionMakesExactlyMaxRetriesAttempts(t *testing.T) {
 func TestCASBackoff_UncontendedPathMakesOneAttemptNoDelay(t *testing.T) {
 	store := &onceSwapStore{}
 	spy := &sleepSpy{}
-	pm := NewCASProxyManager(store, WithCASBackoff(spy.sleep))
+	pm := NewCASProxyManager(store, withSleep(spy.sleep))
 	b, err := pm.Bucket("k", backoffTestConfig())
 	if err != nil {
 		t.Fatal(err)
@@ -136,7 +143,7 @@ func TestCASBackoff_UncontendedPathMakesOneAttemptNoDelay(t *testing.T) {
 func TestCASBackoff_RetryDelaysGrowAndAreNotIdentical(t *testing.T) {
 	store := &loseNTimesStore{n: 8}
 	spy := &sleepSpy{}
-	pm := NewCASProxyManager(store, WithCASBackoff(spy.sleep))
+	pm := NewCASProxyManager(store, withSleep(spy.sleep))
 	b, err := pm.Bucket("k", backoffTestConfig())
 	if err != nil {
 		t.Fatal(err)
@@ -183,7 +190,7 @@ func TestCASBackoff_CancelledDuringDelayReturnsPromptly(t *testing.T) {
 		cancel() // cancellation arrives mid-delay
 		return sctx.Err()
 	}
-	pm := NewCASProxyManager(store, WithCASBackoff(sleep))
+	pm := NewCASProxyManager(store, withSleep(sleep))
 	b, err := pm.Bucket("k", backoffTestConfig())
 	if err != nil {
 		t.Fatal(err)

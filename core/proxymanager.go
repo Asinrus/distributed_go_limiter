@@ -33,14 +33,6 @@ func WithExpireAfterWrite(ttl time.Duration) ProxyOption {
 	return func(c *proxyConfig) { c.ttl = ttl }
 }
 
-// WithCASBackoff overrides how a CAS-backed ProxyManager waits between losing
-// compare-and-swap attempts (default: a real, cancellable sleep). Only meaningful
-// with NewCASProxyManager; a LockProxyManager never retries. Mainly for tests, so
-// backoff pacing can be asserted without sleeping in wall-clock time.
-func WithCASBackoff(sleep func(ctx context.Context, d time.Duration) error) ProxyOption {
-	return func(c *proxyConfig) { c.sleep = sleep }
-}
-
 func newProxyConfig(opts ...ProxyOption) proxyConfig {
 	c := proxyConfig{now: wallNanos, sleep: sleepCtx}
 	for _, o := range opts {
