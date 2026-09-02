@@ -14,8 +14,9 @@ type ProxyManager struct {
 }
 
 type proxyConfig struct {
-	now func() int64
-	ttl time.Duration
+	now   func() int64
+	ttl   time.Duration
+	sleep func(ctx context.Context, d time.Duration) error
 }
 
 // ProxyOption configures a ProxyManager.
@@ -32,8 +33,16 @@ func WithExpireAfterWrite(ttl time.Duration) ProxyOption {
 	return func(c *proxyConfig) { c.ttl = ttl }
 }
 
+// WithCASBackoff overrides how a CAS-backed ProxyManager waits between losing
+// compare-and-swap attempts (default: a real, cancellable sleep). Only meaningful
+// with NewCASProxyManager; a LockProxyManager never retries. Mainly for tests, so
+// backoff pacing can be asserted without sleeping in wall-clock time.
+func WithCASBackoff(sleep func(ctx context.Context, d time.Duration) error) ProxyOption {
+	return func(c *proxyConfig) { c.sleep = sleep }
+}
+
 func newProxyConfig(opts ...ProxyOption) proxyConfig {
-	c := proxyConfig{now: wallNanos}
+	c := proxyConfig{now: wallNanos, sleep: sleepCtx}
 	for _, o := range opts {
 		o(&c)
 	}
@@ -44,7 +53,7 @@ func newProxyConfig(opts ...ProxyOption) proxyConfig {
 // in-memory). Backends call this from their own constructor.
 func NewCASProxyManager(store CASStore, opts ...ProxyOption) *ProxyManager {
 	c := newProxyConfig(opts...)
-	return &ProxyManager{run: casRunner{store: store, ttl: c.ttl}, now: c.now}
+	return &ProxyManager{run: casRunner{store: store, ttl: c.ttl, sleep: c.sleep}, now: c.now}
 }
 
 // NewLockProxyManager builds a ProxyManager over an exclusive-lock store (Postgres).
