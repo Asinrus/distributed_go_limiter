@@ -1,11 +1,11 @@
 module github.com/asinrus/distributed_go_limiter/pgstore
 
-go 1.23
+go 1.25.0
 
 require (
 	github.com/asinrus/distributed_go_limiter/core v0.0.0
-	github.com/jackc/pgx/v5 v5.7.1
-	github.com/stretchr/testify v1.9.0
+	github.com/jackc/pgx/v5 v5.9.2
+	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.33.0
 )
 
@@ -58,9 +58,9 @@ require (
 	go.opentelemetry.io/otel/metric v1.24.0 // indirect
 	go.opentelemetry.io/otel/trace v1.24.0 // indirect
 	golang.org/x/crypto v0.27.0 // indirect
-	golang.org/x/sync v0.8.0 // indirect
+	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/sys v0.25.0 // indirect
-	golang.org/x/text v0.18.0 // indirect
+	golang.org/x/text v0.29.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
