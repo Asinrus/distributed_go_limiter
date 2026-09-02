@@ -26,27 +26,27 @@ the 8 tests in `core/storeerr_test.go`:
 1. Every failure originating at the store boundary — CAS `GetState`,
    `CompareAndSwap`, `Remove` on either backend, `LockStore.Do` — surfaces as
    `errors.Is(err, core.ErrStore)`.
-   (`TestStoreErr_GetStateFailureIsStoreError`,
-   `TestStoreErr_CompareAndSwapFailureIsStoreError`,
-   `TestStoreErr_RemoveFailureIsStoreError`,
-   `TestStoreErr_LockStoreDoFailureIsStoreError`)
+   (`TestAC51_GetStateFailureIsStoreError`,
+   `TestAC51_CompareAndSwapFailureIsStoreError`,
+   `TestAC51_RemoveFailureIsStoreError`,
+   `TestAC51_LockStoreDoFailureIsStoreError`)
 2. CAS retries exhausted is a store-layer failure too, and is additionally
    distinguishable via `errors.Is(err, core.ErrCASRetriesExhausted)`, itself
-   wrapping `ErrStore`. (`TestStoreErr_CASRetriesExhaustedIsStoreError`)
+   wrapping `ErrStore`. (`TestAC51_CASRetriesExhaustedIsStoreError`)
 3. A decode failure on corrupt stored bytes is core's own callback error — it
    only travels back out *through* the store's return value — and must NOT be
    reported as `ErrStore`, on either backend. This is the non-obvious half,
    and only holds because ADR-0009 pins `LockStore.Do` to returning `fn`'s
    error unmodified or `%w`-wrapped; `command.go`'s
    `errors.Is(err, ownErr)` guard (core/command.go:99) depends on that chain
-   staying intact. (`TestStoreErr_CorruptStateIsNotStoreError`)
+   staying intact. (`TestAC51_CorruptStateIsNotStoreError`)
 4. Misuse (`ErrNonPositiveTokens`) and plain refusal (`ok == false`, no
    error) never satisfy `errors.Is(err, core.ErrStore)`.
-   (`TestStoreErr_MisuseAndRefusalAreNotStoreErrors`)
+   (`TestAC51_MisuseAndRefusalAreNotStoreErrors`)
 5. Wrapping in `ErrStore` never hides the backend's own error: it stays
    reachable through the same returned error via both `errors.Is` (for a
    backend that exposes a sentinel) and `errors.As` (for a concrete backend
-   error type). (`TestStoreErr_OriginalBackendErrorStaysReachable`)
+   error type). (`TestAC51_OriginalBackendErrorStaysReachable`)
 
 Every clause above has a test backing it directly; none of the 8 tests was
 left uncovered by the wording, and no clause was written that the tests don't
