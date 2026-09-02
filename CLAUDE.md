@@ -16,8 +16,9 @@ atomically. So the algorithm lives once, in `core`.
 
 ## Process & context
 Roles, process, and progress live in **`ai-context/`** (start with
-`ai-context/README.md`; `ai-context/PLANS.md` is the architect-owned progress
-tracker). User-facing backend docs are in `docs/client/`. Ratified decisions
+`ai-context/README.md`; `ai-context/tasks/next-roadmap.md` is the current
+architect-owned progress tracker, per `docs/adr/0016-retire-plans-md.md`).
+User-facing backend docs are in `docs/client/`. Ratified decisions
 are recorded as ADRs in `docs/adr/`; work items track through
 `ai-context/tasks/` → `ai-context/done/`.
 
