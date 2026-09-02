@@ -20,11 +20,16 @@ That is the entire etcd-specific surface. Everything after it — `pm.Bucket(key
 
 etcd deletes the key itself when its lease expires, so there is nothing to sweep — see
 `docs/adr/0012-ttl-is-not-a-correctness-mechanism.md`. The first write to a key grants a
-fresh lease; every write after that reuses it, refreshing its countdown with a single
-`KeepAliveOnce` (never `KeepAlive`, which would keep the lease — and the state under it —
-alive forever regardless of write activity). This bounds live leases by live keys instead of
-by write attempts. A write whose CAS loses its race revokes the lease it granted rather than
-leaving it to expire unattached to anything.
+fresh lease; every write after that reuses whichever lease is currently attached to the key —
+refreshing its countdown with a single `KeepAliveOnce` (never `KeepAlive`, which would keep
+the lease, and the state under it, alive forever regardless of write activity) — instead of
+granting a new one. That reuse is based on what each write's own read observed attached to the
+key, so it stays correct even when several processes write the same key: whichever lease is
+really there gets refreshed and reattached, not a private id that could go stale the moment
+another process writes. This bounds live leases by live keys instead of by write attempts. A
+write whose CAS loses its race revokes the lease it granted rather than leaving it to expire
+unattached to anything (a best-effort revoke: if it fails, the lease still expires on its own
+TTL rather than turning a normal lost race into an error).
 
 etcd lease TTLs are granted in whole seconds with a minimum of 1, so a `WithTTL` under a second
 rounds up. The etcd server also enforces its own minimum lease TTL (roughly three times its

@@ -18,12 +18,20 @@ type store struct {
 	cli    *clientv3.Client
 	prefix string
 
-	// leases caches, per key, the lease ID this store last attached
-	// successfully. It lets repeat writes to the same key reuse and refresh
-	// that lease instead of granting a new one every time, so live leases
-	// stay bounded by live keys rather than by write count. It is a local
-	// hint only: a miss (key never written by this store, or the cached
-	// lease no longer exists) just falls back to granting fresh.
+	// leases caches, per key, the lease ID GetState most recently observed
+	// attached to that key in etcd — not a lease this store granted itself.
+	// The executor always calls GetState immediately before CompareAndSwap
+	// (core/command.go), so by the time a write uses the cache it reflects
+	// whichever writer — this store or another process sharing the key —
+	// last attached a lease, and self-corrects every read/write cycle. That
+	// is what makes it safe when several stores write the same key: a
+	// per-writer "lease I last wrote" cache cannot see another writer's
+	// lease and would keep refreshing its own orphan forever.
+	//
+	// ponytail: entries are never evicted for a key this store stops
+	// touching, so this grows with the set of distinct keys ever seen
+	// (bytes per key, not a full etcd lease). Add a bound if a workload
+	// churns through many short-lived keys on one long-lived store.
 	mu     sync.Mutex
 	leases map[string]clientv3.LeaseID
 }
@@ -38,7 +46,13 @@ func (s *store) GetState(ctx context.Context, key string) ([]byte, bool, error) 
 		return nil, false, fmt.Errorf("etcdstore: get %q: %w", key, err)
 	}
 	if len(resp.Kvs) == 0 {
+		s.clearLease(key)
 		return nil, false, nil
+	}
+	if lease := clientv3.LeaseID(resp.Kvs[0].Lease); lease != 0 {
+		s.setLease(key, lease)
+	} else {
+		s.clearLease(key)
 	}
 	return resp.Kvs[0].Value, true, nil
 }
@@ -70,17 +84,17 @@ func (s *store) CompareAndSwap(ctx context.Context, key string, old, newState []
 		// This attempt lost its race: Then never ran, so a freshly granted
 		// lease was never attached to a key. Revoke it now rather than
 		// leaving it to expire on its own — otherwise live lease count
-		// grows with write *attempts*, not live keys.
+		// grows with write *attempts*, not live keys. A failed revoke is
+		// only a best effort: core/store.go's contract is that
+		// swapped=false, err=nil means "lost the race, retry", and
+		// core/command.go aborts without retrying on any non-nil error. A
+		// transient Revoke failure must not turn a normal lost race into a
+		// hard failure for state that is perfectly fine — the orphaned
+		// lease still expires on its own TTL either way.
 		if freshLease != 0 {
-			if _, err := s.cli.Revoke(ctx, freshLease); err != nil {
-				return false, fmt.Errorf("etcdstore: revoke lease %q: %w", key, err)
-			}
+			_, _ = s.cli.Revoke(ctx, freshLease)
 		}
 		return false, nil
-	}
-
-	if freshLease != 0 {
-		s.setLease(key, freshLease)
 	}
 	return true, nil
 }
@@ -92,9 +106,11 @@ func (s *store) CompareAndSwap(ctx context.Context, key string, old, newState []
 // granularity is whole seconds with a minimum of 1, so sub-second TTLs round
 // up.
 //
-// Repeat writes to the same key reuse the lease from the last successful
-// write on this store, refreshing its countdown with a single KeepAliveOnce
-// rather than granting (and leaving behind) a new lease every time. This is
+// Repeat writes to a key reuse whatever lease GetState last observed
+// attached to it (see the leases field doc), refreshing its countdown with
+// a single KeepAliveOnce and explicitly re-attaching it (WithLease, not
+// WithIgnoreLease — the cached ID may belong to a lease another writer
+// granted, so it must be named, not assumed already-attached). This is
 // deliberately not KeepAlive: a continuous keepalive would keep the lease —
 // and the state under it — alive forever regardless of write activity,
 // which defeats expire-after-write. KeepAliveOnce resets the countdown once,
@@ -106,11 +122,10 @@ func (s *store) putOpts(ctx context.Context, key string, ttl time.Duration) ([]c
 
 	if leaseID, ok := s.getLease(key); ok {
 		if _, err := s.cli.KeepAliveOnce(ctx, leaseID); err == nil {
-			return []clientv3.OpOption{clientv3.WithIgnoreLease()}, 0, nil
+			return []clientv3.OpOption{clientv3.WithLease(leaseID)}, 0, nil
 		}
-		// Cached lease is gone: expired, or the key was last written by a
-		// different store/process under a different lease. Fall through to
-		// granting fresh.
+		// Cached lease is gone: expired, or stale. Fall through to granting
+		// fresh; the next GetState will re-observe whatever wins.
 		s.clearLease(key)
 	}
 
