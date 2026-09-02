@@ -58,8 +58,7 @@ replica keeps its own count and doubling the replicas silently doubles the real 
 - [`docs/client/postgres.md`](docs/client/postgres.md) — schema and how to apply it with
   your own migration tool, sweeping expired rows, server configuration.
 - `ai-context/` — process, roles, and progress (`ai-context/tasks/next-roadmap.md`
-  tracker, `ai-context/tasks/` → `ai-context/done/` work items; see
-  `docs/adr/0016-retire-plans-md.md`).
+  tracker, `ai-context/tasks/` → `ai-context/done/` work items).
 - `docs/adr/` — ratified architecture decisions, one file each.
 - `CLAUDE.md` — code map + build/test commands.
 
