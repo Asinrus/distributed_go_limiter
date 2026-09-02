@@ -69,6 +69,11 @@ Root is a `go.work` workspace, **not** a module — build/test per module.
 - Time source: local buckets use a monotonic clock; distributed use wall-clock epoch
   (shared across nodes). Both injectable via `WithClock` for tests.
 
+## Go version
+One version, `go 1.23`, for every `go.mod` and `go.work` — development and any
+future consumer alike. No `toolchain` directive, no separate dev pin. See
+`docs/adr/0014-single-go-version.md` for the derivation.
+
 ## Build & test
 `/verify` discovers the workspace modules, runs the suite, and routes failures to the
 investigator — the block below is what it does, and the fallback.
