@@ -1,70 +1,52 @@
-# etcdstore's grpc dependency carries GO-2026-6061, and its fix conflicts with the go 1.23 pin
+# Bump grpc to close GO-2026-6061, raising two modules' `go` directive
 
-**Where this came from.** PR #9 (`asinrus/github-actions-ci`) added a
-per-module `govulncheck` step to CI. Its first-ever run found this — it is
-not from the planning round, and the owner has ruled PR #9 blocks on it.
+**The ruling.** The owner resolved the conflict this task originally
+documented: `google.golang.org/grpc` moves to v1.82.1 to close GO-2026-6061.
+v1.82.1 requires `go 1.25.0`, above the project-wide `go 1.23` pin
+(`ai-context/tasks/go-version-1-23.md`, `docs/adr/0014-single-go-version.md`).
+Per that task's own escape hatch — raise only the module that genuinely needs
+a post-1.23 floor, and record which feature forced it — only the modules that
+actually carry grpc were raised. Everything else stays at `go 1.23`.
 
-**The vulnerability.** `etcdstore` requires `google.golang.org/grpc v1.64.1`
-(transitively, via `go.etcd.io/etcd/client/v3`, and again via
-`testcontainers-go` in tests). GO-2026-6061 (xDS RBAC authorization engine
-and HTTP/2 transport server) affects every version below **v1.82.1**, per the
-OSV record (`https://vuln.go.dev/ID/GO-2026-6061.json`): a single affected
-range, `introduced: 0`, `fixed: 1.82.1`. There is no earlier patched release
-to fall back to.
+**What was verified, not just carried over from the prior investigation.**
+`go mod graph` shows `google.golang.org/grpc` in every module's graph,
+including `redisstore`, `pgstore`, and `mongostore` — all three pull it
+transitively through `testcontainers-go`, a test-only dependency. `govulncheck`
+(which does reachability analysis, not just graph presence) confirms GO-2026-6061
+is not reachable from any code path in those three modules, before or after
+the bump — only `etcdstore` (via `go.etcd.io/etcd/client/v3`) and `examples`
+(via the etcd client and testcontainers-go) actually call into the vulnerable
+grpc transport code. `core` has no grpc in its graph at all.
 
-`examples/go.mod` carries the same `google.golang.org/grpc v1.64.1` line
-(pulled in the same way, via the etcd client and testcontainers) and is
-affected identically. `mongostore/go.mod` has no `google.golang.org/grpc`
-entry at all, direct or transitive — confirmed with
-`grep -rn 'google.golang.org/grpc' */go.mod` and `go mod graph` per module —
-so it is not affected. `redisstore`, `pgstore`, and `core` don't depend on
-grpc either.
-
-**The conflict.** `google.golang.org/grpc@v1.82.1`'s own `go.mod` declares
-`go 1.25.0`. `ai-context/tasks/go-version-1-23.md` (PR #13,
-`asinrus/go-1-23-pin`) is a separate, already-ruled owner decision pinning
-every module to `go 1.23`; that ruling measured `etcdstore`'s floor at
-`go1.22` using the *pre-bump* dependency set and is not this task's to
-reopen.
-
-Verified directly rather than inferred from the declared directive: with
-`etcdstore/go.mod`'s `go` line temporarily set to `1.23` and
-`google.golang.org/grpc` bumped to `v1.82.1`, `go mod tidy` (GOTOOLCHAIN=local,
-go1.26.5 installed) did not error — it silently rewrote the `go` line from
-`1.23` to `1.26.5` to satisfy grpc's `go >= 1.25.0` requirement. That
-auto-rewrite is exactly what the parent task told this agent not to do
-silently, so it was reverted; `etcdstore/go.mod` and `go.sum` are unchanged
-from `main`.
-
-**Net result:** no version of `google.golang.org/grpc` both fixes
-GO-2026-6061 and keeps `etcdstore` (or `examples`) buildable at `go 1.23`.
-This is a genuine conflict between two owner rulings — routed to the
-Architect to resolve, not decided here. Candidates worth putting in front of
-the owner: raise `etcdstore`'s (and `examples`') `go` directive above 1.23
-as a named, recorded exception (the 1.23 task's own text allows a
-per-module raise "if a module genuinely needs a post-1.23 feature... record
-which feature forced it"); wait on an upstream grpc backport if one appears;
-or accept the open advisory in `etcdstore` until one of the above lands.
-
-**Scope of this task as filed:** investigation and documentation only. No
-`go.mod`/`go.sum` change was committed to `etcdstore` or `examples` — see
-above for why. No new code was written.
+**What changed:**
+- `etcdstore/go.mod`: `google.golang.org/grpc` → v1.82.1; `go` directive →
+  `1.25.0` (raised by `go mod tidy` to satisfy grpc's own `go.mod`, not
+  hand-picked). `go.sum` updated to match.
+- `examples/go.mod`: same grpc bump, same `go` directive raise, same reason
+  (it pulls grpc via the etcd client and testcontainers-go). `go.sum` updated.
+- `go.work`: `go` directive raised to `1.25.0` — the minimum that satisfies
+  its highest member (`etcdstore`/`examples`). No `toolchain` directive was
+  added anywhere, consistent with the standing constraint.
+- `core/go.mod`, `redisstore/go.mod`, `pgstore/go.mod`, `mongostore/go.mod`:
+  unchanged, still `go 1.23`.
+- `docs/adr/0014-single-go-version.md`: amended with a short note recording
+  which two modules were raised, to what, and that a transitive grpc security
+  floor forced it, not a language feature.
 
 ## Test scenarios
 
-**Black-box (tester, Gate 2):** none. No behavior changed; this task is
-report-only pending an Architect decision.
+**Black-box (tester, Gate 2):** none beyond "etcd still rate-limits
+correctly" — this is a dependency version bump with no behavior change, so
+there is no new black-box surface to exercise.
 
-**Unit / integration (Dev):** none added, since no fix was applied. The
-verification performed was diagnostic, not a regression check:
-- `govulncheck ./...` in `etcdstore` against `main`'s unmodified `go.mod`
-  confirms GO-2026-6061 is present (`google.golang.org/grpc@v1.64.1`, fixed
-  in `v1.82.1`).
-- A scratch `go mod tidy` with `go 1.23` + `grpc v1.82.1` in `etcdstore`
-  (not committed) confirms the toolchain silently raises the `go` directive
-  rather than building at 1.23, which is the evidence for the conflict above.
-
-Once the Architect rules on a path forward, whichever module's `go.mod`
-changes needs the full existing treatment: `go build`, `go vet`, `go test`
-against a real etcd container, and a rerun of `govulncheck` to confirm the
-advisory clears.
+**Unit / integration (Dev):**
+- Per module (`core`, `redisstore`, `pgstore`, `mongostore`, `etcdstore`):
+  `go vet ./...` and `go test ./...` (`core` with `-race`) pass unchanged —
+  the bump does not touch the algorithm or any store's behavior.
+- `examples`: `go vet ./...` and `go build ./...` pass (no test files).
+- `etcdstore`'s full suite, including the shared `core/tck` conformance
+  suite run against a real etcd container (`AC42_ConsistencyUnderContention`
+  among its subtests), passes after the bump — a dependency change that
+  breaks conformance would not be done.
+- `govulncheck ./...` in `etcdstore` and `examples`: GO-2026-6061 present
+  before the bump, absent after, in both.
