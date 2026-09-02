@@ -43,6 +43,12 @@ type casRunner struct {
 
 func (r casRunner) execute(ctx context.Context, key string, cfg Config, now int64, op bucketOp) error {
 	for i := 0; i < maxCASRetries; i++ {
+		// Checked here rather than left to the store: uniform across every backend
+		// instead of dependent on whether that driver's client honours ctx, and it
+		// catches cancellation arriving between a successful read and the retry too.
+		if err := ctx.Err(); err != nil {
+			return storeErr(err)
+		}
 		old, found, err := r.store.GetState(ctx, key)
 		if err != nil {
 			return storeErr(err)
@@ -82,6 +88,11 @@ type lockRunner struct {
 }
 
 func (r lockRunner) execute(ctx context.Context, key string, cfg Config, now int64, op bucketOp) error {
+	// Same choke point as casRunner: reject work before it starts rather than trust
+	// every LockStore.Do implementation to notice cancellation on its own.
+	if err := ctx.Err(); err != nil {
+		return storeErr(err)
+	}
 	// Our own callback failure (a decode error) comes back out through Do's return
 	// value; keep hold of it so it is not mistaken for a store failure.
 	var ownErr error

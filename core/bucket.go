@@ -19,6 +19,10 @@ var (
 	// ErrStore reports that the backing store failed — I/O error, timeout,
 	// cancellation, or unavailability. Every error crossing the store boundary
 	// wraps it, and the backend's own error stays reachable via errors.Is/As.
+	// A cancelled or expired ctx wraps the same way: the underlying
+	// context.Canceled / context.DeadlineExceeded stays reachable via errors.Is,
+	// so a caller can tell "my context ended" apart from "the store is down" while
+	// still catching both under one errors.Is(err, ErrStore) check.
 	// core does not decide fail-open vs fail-closed; the caller checks
 	// errors.Is(err, ErrStore). Distributed buckets only.
 	ErrStore = errors.New("core: store failure")
