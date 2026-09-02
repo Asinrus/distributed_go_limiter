@@ -35,5 +35,6 @@ Thumbs.db
 .env.local
 
 # Claude Code: agents/ and commands/ are committed (they encode the project's
-# process); per-machine permission grants are not.
+# process); per-machine permission grants and agent scratch reports are not.
 .claude/settings.local.json
+.claude/reports/
