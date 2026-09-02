@@ -62,6 +62,9 @@ replica keeps its own count and doubling the replicas silently doubles the real 
 - `docs/adr/` — ratified architecture decisions, one file each.
 - `CLAUDE.md` — code map + build/test commands.
 
+## Go version
+Built and tested at `go 1.23`, same version across every module.
+
 ## Status
 v1: single bandwidth per bucket, blocking consume, three backends. See `ai-context/PLANS.md`.
 
