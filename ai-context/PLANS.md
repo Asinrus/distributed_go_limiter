@@ -18,7 +18,7 @@ SELECT-FOR-UPDATE over advisory locks (0003), TEXT bucket keys, no mapper
 backend TCK (0006), pgstore identifiers are one quoted name (0008), pgstore
 creates no row for a read-only miss (0010), tester is black-box only (0011),
 TTL is not a correctness mechanism (0012), Architect scopes a task's test
-coverage (0013). Smaller settled facts that don't clear the ADR bar (module
+coverage (0013), cancellation is not a store failure (0014). Smaller settled facts that don't clear the ADR bar (module
 path, Go toolchain installed by the user) aren't tracked anywhere formal —
 they're just true of the repo.
 
@@ -95,10 +95,11 @@ about each:
   (ADR 0009): `Do` must return `fn`'s error unmodified or `%w`-wrapped, never
   replaced, flattened, or swallowed. Doc-only; TCK enforcement deferred.
   Implemented, black-box verified: `ai-context/done/lockstore-do-godoc-contract.md`.
-- `ai-context/tasks/q9-errstore-contract-ac.md` — assign an AC id to the
-  `ErrStore` contract the 8 tests in `core/storeerr_test.go` currently test
-  without one; unblocked by Q8 — the decode-vs-outage clause stays a core
-  obligation, not a per-backend TCK one.
+- Q9 (`ErrStore` contract) — **ruled and folded** (ADR 0014): the contract is
+  **AC-51**, with a fourth clause — a cancellation is not a store failure, so a
+  cancelled context yields the bare context error, outside `ErrStore`. The Q9 task
+  file is gone; the id and the 8 test renames in `core/storeerr_test.go` ride
+  with `ai-context/tasks/core-ctx-cancellation.md`, which adds that clause.
 
 - `ai-context/tasks/plans-md-vs-changelog.md` — **deferred, unruled**: whether
   this file survives as a tracker or becomes a versioned changelog now that
@@ -230,3 +231,17 @@ folded into `docs/adr/` (0001-0006) rather than repeated here.
   CI files had their "Ruling (repo owner)" headers corrected to separate the
   owner's direction (one version; yes to GitHub CI) from the Architect's
   derivation (1.23 from the measured floors; the job design).
+- _ac50-error-shape_: ruled the error shape `core-ctx-cancellation.md` was
+  deferring — a cancelled or expired context returns the **bare** context
+  error, not `ErrStore` (ADR 0014, narrowing 0002), with `storeErr`
+  (`core/command.go:17`) as the single choke point so a driver-noticed and a
+  guard-noticed cancellation cannot differ by a race; rejected the
+  `ErrStore`-wrapped variant because the documented check is `ErrStore` first,
+  which routes every client disconnect into the outage branch. Folded Q9 in
+  (one contract, one open item): the `ErrStore` criterion is now **AC-51**.
+  Rejected merging rows 5 and 6 — same loop, but a two-AC correctness fix
+  should not wait on a backoff-tuning review; row 6 instead settles the shared
+  line for row 5 (interruptible sleep, bare context error). Kept the `MemStore`
+  ctx guards, demoted in the file to hygiene with an explicit warning that
+  AC-50 tests must not run through `MemStore` or they prove the store instead
+  of the executor.
