@@ -6,7 +6,7 @@ require (
 	github.com/asinrus/distributed_go_limiter/core v0.0.0
 	github.com/stretchr/testify v1.9.0
 	github.com/testcontainers/testcontainers-go/modules/mongodb v0.33.0
-	go.mongodb.org/mongo-driver v1.17.1
+	go.mongodb.org/mongo-driver v1.17.7
 )
 
 require (
