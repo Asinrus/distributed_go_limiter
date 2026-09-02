@@ -19,7 +19,11 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          # go.work pins 1.25.0 (etcdstore/examples' own floor); GOTOOLCHAIN=local
+          # means this must already satisfy it, so it's the tree-wide minimum, not
+          # core's 1.23. 1.25.14 is the current 1.25.x patch, carrying the fixes
+          # for GO-2026-6090 (crypto/tls) and GO-2026-5972 (encoding/asn1).
+          go-version: "1.25.14"
 
       - name: Discover modules
         id: modules
