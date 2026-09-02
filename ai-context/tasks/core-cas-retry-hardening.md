@@ -47,7 +47,7 @@ rather than spinning. This is a CAS-path defect (`redisstore`, `mongostore`,
   backoff — and it leaves this one **no open question about the shared line**:
   the sleep must be interruptible by `ctx.Done()`, and on interruption it
   returns the bare `context.Canceled` / `context.DeadlineExceeded`, not
-  `ErrStore` (`docs/adr/0014-cancellation-is-not-a-store-failure.md`). Expect a
+  `ErrStore` (`docs/adr/0015-cancellation-is-not-a-store-failure.md`). Expect a
   trivial rebase on the loop header, not a design conflict.
 - Changing `CASStore` or any backend. This is `core` only.
 - Adaptive or per-key backoff tuning, and any metric or log of retry counts
@@ -58,10 +58,9 @@ implementation property, not a behavioral criterion — nothing observable to a
 caller changes, which is why the black-box note below says a green sandbox
 proves nothing here. The one part that is behavior, "exhaustion returns
 `ErrCASRetriesExhausted` wrapping `ErrStore`", predates this task and belongs
-to the `ErrStore` criterion, now **AC-51** —
-`docs/adr/0014-cancellation-is-not-a-store-failure.md`, implemented by
-`ai-context/tasks/core-ctx-cancellation.md`; do not assign it a second id
-here. AC-49, AC-50 and AC-51 are taken by the other two tier-1 tasks.
+to the `ErrStore` criterion, now **AC-51** — ratified in
+`ai-context/tasks/q9-errstore-contract-ac.md`; do not assign it a second id
+here. AC-49 to AC-52 are taken by other tasks.
 
 **Done looks like:** concurrent callers on one key no longer retry in lockstep,
 the retry bound is a stated latency budget rather than an arbitrary number, the

@@ -31,7 +31,7 @@ over-counts under load rejects legitimate traffic it should have served.
 
 ## The error shape is decided: bare context error
 
-Ratified as `docs/adr/0014-cancellation-is-not-a-store-failure.md`. Dev does
+Ratified as `docs/adr/0015-cancellation-is-not-a-store-failure.md`. Dev does
 not reopen it. In short: a cancelled or expired context yields
 `context.Canceled` / `context.DeadlineExceeded` **unwrapped**, and
 `errors.Is(err, core.ErrStore)` is **false** for it. `ErrStore` is the
@@ -73,21 +73,13 @@ done, discarding the underlying error. Both facts Dev needs from that:
   teaches the wrong shape. Three one-line guards. If it is dropped, nothing
   regresses; if it is kept, no AC-50 test may depend on it (see Test scenarios).
 
-**Folded in: the `ErrStore` criterion gets an id (AC-51).** This absorbs what
-was the Q9 task file under `ai-context/tasks/` (roadmap row 16), deleted in the
-same change — leaving two open items on one error contract guarantees the AC is
-written twice or written incomplete, and this task adds the contract's fourth
-clause. Its blocker is also gone: it was waiting on Q8, ratified as
-`docs/adr/0009-lockstore-do-propagates-fn-error.md`.
-
-- **AC-51:** a store-layer failure is distinguishable from misuse and from
-  refusal; the backend's own error stays reachable through `errors.Is` /
-  `errors.As`; a corrupt-state decode failure is **not** reported as a store
-  failure; a cancellation is **not** reported as a store failure.
-- The 8 tests in `core/storeerr_test.go:91-186` are renamed `TestAC51_...` and
-  must still pass unchanged. `core/storeerr_test.go:16` ("No acceptance
-  criterion covers this yet — see the report to the Architect") is now false
-  and points at an artifact that no longer exists; it goes with the rename.
+**Interaction with AC-51.** The `ErrStore` criterion is ratified separately in
+`ai-context/tasks/q9-errstore-contract-ac.md` (open PR #11) and this task does
+not restate or renumber it. But its clause 1 — "every failure originating at
+the store boundary surfaces as `errors.Is(err, core.ErrStore)`" — is written
+without a cancellation exception, so ADR 0015 makes cancellation a **carve-out
+from AC-51 clause 1**, not a sixth clause. Whoever merges second reconciles the
+wording; nobody assigns a new id for it.
 
 **Dependency, deliberately not absorbed.** The right long-term home for the
 cancellation assertion is the TCK, so every backend is held to it and not just
@@ -101,19 +93,19 @@ the TCK case is row 7's job. Do not silently rewrite the TCK here.
 - Backoff and jitter in the retry loop — that is
   `ai-context/tasks/core-cas-retry-hardening.md`, and it stays a separate task.
   Both touch `core/command.go:45`, and the merge was considered and rejected:
-  this task is a behavioral contract with two AC ids and a five-line diff, that
-  one is a pacing design with no AC and an injectable-timer question still open.
+  this task is a behavioral contract with an AC and a five-line diff, that one
+  is a pacing design with no AC and an injectable-timer question still open.
   Merging makes a shippable correctness fix hostage to a tuning debate in
   review. **This one lands first**, and it leaves that one no open question: a
   backoff sleep must be interruptible by `ctx.Done()` and must return the same
-  bare context error ADR 0014 fixes here.
+  bare context error ADR 0015 fixes here.
 - Rolling back a consumption that a later cancellation would have prevented.
   The check is "do not start work that is already pointless", not a transaction.
 
-**AC ids: AC-50** (cancellation on the distributed path — AC-32 covers the
-local blocking wait only) and **AC-51** (the `ErrStore` contract, folded in
-above). Both assigned now, not at pickup. AC-49 is
-`core-initial-tokens-validation.md`.
+**AC id: AC-50** (cancellation on the distributed path — AC-32 covers the local
+blocking wait only), assigned now, not at pickup. AC-49 is
+`core-initial-tokens-validation.md`, AC-51 the `ErrStore` contract, AC-52 the
+vendor conformance sibling (`ai-context/tasks/tck-vendor-ctx-conformance.md`).
 
 **Done looks like:** an already-cancelled context never consumes a token
 through any backend, the error a caller sees is the bare context error and is
@@ -151,13 +143,13 @@ if the sandbox ever gains a controllable delay on the store path.
   out the remaining attempts.
 - AC-50: the lock path (`lockRunner`) refuses an already-cancelled context too,
   not just the CAS path.
-- AC-51: the error is `errors.Is(err, context.Canceled)` and **not**
+- The error is `errors.Is(err, context.Canceled)` and **not**
   `errors.Is(err, core.ErrStore)` — both directions asserted, on both runners.
-- AC-51: a store that fails with its own error on a *live* context still
+- A store that fails with its own error on a *live* context still
   returns `ErrStore` with the backend error reachable. The existing eight cases
-  in `core/storeerr_test.go` cover this; renaming them to `TestAC51_...` is
-  part of the task.
-- AC-51: a store that returns a real backend error while the context is
+  in `core/storeerr_test.go` cover this already; they belong to AC-51 and are
+  not this task's to rename.
+- AC-50: a store that returns a real backend error while the context is
   cancelled reports the cancellation, not `ErrStore` — this is the choke-point
   behavior and the one place the ruling is visible as a deliberate choice.
 - Hygiene item only, if kept: `MemStore` returns the context error directly

@@ -42,10 +42,32 @@ causes and names the context errors instead. This narrows ADR 0002's "store
 failures surface only as `core.ErrStore`" — that sentence is about transport
 and degradation policy, and it stands for everything except cancellation.
 
-The `ErrStore` contract now has four clauses, tracked as **AC-51**: a store
-failure is distinguishable from misuse and from refusal; the backend's own
-error stays reachable through `errors.Is`/`errors.As`; a corrupt-state decode
-failure is not a store failure (`core/command.go:100-102`); a cancellation is
-not a store failure. `ErrCASRetriesExhausted` stays inside `ErrStore` — the
-store is healthy but the operation did not complete through it, which is the
-same decision for the caller.
+AC-51, the `ErrStore` criterion ratified in
+`ai-context/tasks/q9-errstore-contract-ac.md`, states as clause 1 that *every*
+failure originating at the store boundary surfaces as `ErrStore`. This decision
+is a **carve-out from that clause**, not a new criterion and not a new id: a
+cancellation is the one store-boundary failure that does not. Everything else
+in AC-51 stands, including `ErrCASRetriesExhausted` inside `ErrStore` — there
+the store is healthy but the operation did not complete through it, which is
+the same decision for the caller.
+
+## Unresolved: open PR #12 implements the opposite
+
+**This ADR is not safe to merge on its own.** Open PR #12
+(`asinrus/ctx-cancellation`) already implements AC-50 with the rejected option:
+its executor guards return `storeErr(ctx.Err())`, and it edits `core/bucket.go`
+to argue that a caller catches cancellation and outage together under one
+`errors.Is(err, ErrStore)`. That is internally consistent — both the guard and
+the driver path wrap, so it has no two-shapes problem — and it agrees with
+AC-51 clause 1 as PR #11 words it. It is simply the opposite trade-off: it
+optimises for one check at the call site, this ADR optimises for a caller being
+able to tell a disconnected client from a dead backend.
+
+Both cannot merge. The choice is the repo owner's, and it is a one-line
+decision with a three-file consequence: pick a shape, then either PR #12's
+`core/command.go` guards or this ADR plus the `storeErr` choke point it
+requires is rewritten, and AC-51 clause 1 either grows the carve-out above or
+does not. Nothing else in `ai-context/tasks/core-ctx-cancellation.md` depends
+on the answer, and nothing in
+`ai-context/tasks/tck-vendor-ctx-conformance.md` (AC-52) does either — its
+assertions are at the store boundary, below where `ErrStore` is applied.
