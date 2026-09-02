@@ -8,10 +8,10 @@ require (
 	github.com/asinrus/distributed_go_limiter/mongostore v0.0.0
 	github.com/asinrus/distributed_go_limiter/pgstore v0.0.0
 	github.com/asinrus/distributed_go_limiter/redisstore v0.0.0
-	github.com/jackc/pgx/v5 v5.7.1
-	github.com/redis/go-redis/v9 v9.6.1
+	github.com/jackc/pgx/v5 v5.9.2
+	github.com/redis/go-redis/v9 v9.6.3
 	go.etcd.io/etcd/client/v3 v3.5.16
-	go.mongodb.org/mongo-driver v1.17.1
+	go.mongodb.org/mongo-driver v1.17.7
 )
 
 require (
@@ -38,9 +38,9 @@ require (
 	go.uber.org/zap v1.17.0 // indirect
 	golang.org/x/crypto v0.50.0 // indirect
 	golang.org/x/net v0.53.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
+	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect
-	golang.org/x/text v0.36.0 // indirect
+	golang.org/x/text v0.39.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260414002931-afd174a4e478 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260414002931-afd174a4e478 // indirect
 	google.golang.org/grpc v1.82.1 // indirect
