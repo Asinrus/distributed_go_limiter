@@ -40,7 +40,10 @@ func (s *MemStore) liveEntry(key string) (memEntry, bool) {
 	return e, true
 }
 
-func (s *MemStore) GetState(_ context.Context, key string) ([]byte, bool, error) {
+func (s *MemStore) GetState(ctx context.Context, key string) ([]byte, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	e, ok := s.liveEntry(key)
@@ -50,7 +53,10 @@ func (s *MemStore) GetState(_ context.Context, key string) ([]byte, bool, error)
 	return append([]byte(nil), e.data...), true, nil
 }
 
-func (s *MemStore) CompareAndSwap(_ context.Context, key string, old, newState []byte, ttl time.Duration) (bool, error) {
+func (s *MemStore) CompareAndSwap(ctx context.Context, key string, old, newState []byte, ttl time.Duration) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	cur, present := s.liveEntry(key)
@@ -73,7 +79,10 @@ func (s *MemStore) CompareAndSwap(_ context.Context, key string, old, newState [
 	return true, nil
 }
 
-func (s *MemStore) Remove(_ context.Context, key string) error {
+func (s *MemStore) Remove(ctx context.Context, key string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.m, key)
