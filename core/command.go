@@ -34,11 +34,16 @@ func storeErr(ctx context.Context, err error) error {
 // maxCASRetries bounds both the number of store round trips and, now that losing
 // attempts back off, the wall-clock cost of a call that is ultimately rejected.
 // The loop backs off before every retry but the first, so the worst case is
-// (maxCASRetries-1)*backoffCap = 15*32ms = 480ms of sleep plus 16
-// GetState/CompareAndSwap round trips — an acceptable budget for a synchronous
-// decision that would otherwise spin at wire speed, dropped from the prior 100
-// immediate attempts.
-const maxCASRetries = 16
+// (maxCASRetries-1)*backoffCap = 63*32ms = 2016ms of sleep plus 64
+// GetState/CompareAndSwap round trips.
+//
+// Measured against core/tck's AC-42 (8 workers x 250 ops on one hot key) on
+// every real CASStore backend, not just MemStore, where a lost race costs a
+// network round trip rather than nanoseconds: 16 failed against mongostore
+// with retries exhausted, and 32 flaked the same way on a repeat run. 64 held
+// across 2 redis runs, 3 mongostore runs, and 3 etcd runs — still a bounded
+// latency budget, unlike the prior unbounded-cost 100 immediate attempts.
+const maxCASRetries = 64
 
 const (
 	backoffBase = time.Millisecond      // delay before the first retry
