@@ -52,11 +52,13 @@ jobs:
 
       - name: Test remaining modules
         run: |
+          FAILED=0
           while IFS= read -r dir; do
             [ -n "$dir" ] || continue
             echo "== $dir =="
-            (cd "$dir" && go vet ./... && go test ./...)
+            (cd "$dir" && go vet ./... && go test ./...) || FAILED=1
           done <<< "$others"
+          exit "$FAILED"
 
       - name: gofmt
         run: |
@@ -70,8 +72,10 @@ jobs:
       - name: govulncheck
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
+          FAILED=0
           while IFS= read -r dir; do
             [ -n "$dir" ] || continue
             echo "== $dir =="
-            (cd "$dir" && govulncheck ./...)
+            (cd "$dir" && govulncheck ./...) || FAILED=1
           done <<< "$modules"
+          exit "$FAILED"
