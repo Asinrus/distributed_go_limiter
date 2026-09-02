@@ -28,10 +28,12 @@ type store struct {
 	// per-writer "lease I last wrote" cache cannot see another writer's
 	// lease and would keep refreshing its own orphan forever.
 	//
-	// ponytail: entries are never evicted for a key this store stops
-	// touching, so this grows with the set of distinct keys ever seen
-	// (bytes per key, not a full etcd lease). Add a bound if a workload
-	// churns through many short-lived keys on one long-lived store.
+	// Entries are never evicted for a key this store stops touching, so
+	// the map grows with the set of distinct keys ever seen (bytes per
+	// key, not a full etcd lease — separate from the etcd-side lease
+	// count this cache bounds). Revisit with an eviction policy if a
+	// workload churns through many short-lived keys on one long-lived
+	// store.
 	mu     sync.Mutex
 	leases map[string]clientv3.LeaseID
 }
