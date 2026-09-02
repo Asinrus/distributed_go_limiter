@@ -47,5 +47,59 @@ observable behavior change, so Gate 2 is satisfied by Gate 1
 (`docs/adr/0013-architect-scopes-test-coverage.md`). Dev is not involved; this
 is Architect work end to end.
 
-**Deferred deliberately.** Raised during PR #7 and parked by the repo owner so
-the backend work could land first. Not blocking anything.
+## Ruling — `PLANS.md` deleted, no replacement changelog file
+
+Recorded in `docs/adr/0016-retire-plans-md.md`.
+
+**What survives, and where:**
+- What changed, when, and why it was changed — `git log` on `main` (the
+  messages already say this; several already do it well) plus `docs/adr/` for
+  the decisions that clear ADR 0007's bar.
+- What is done — `ai-context/done/`.
+- What is queued and in what order — `ai-context/tasks/next-roadmap.md`.
+- What is in flight — the task files still sitting in `ai-context/tasks/`.
+
+No single file replaces `PLANS.md` as "the tracker" — the four sources above,
+each already authoritative for its own slice, are the tracker collectively.
+This is the same convention already in force elsewhere in this repo (task
+files don't restate `done/`'s existence; ADRs don't restate the task file
+that raised them) and matches the general rule against tracking in prose what
+version control, or another file already in the repo, already answers.
+
+**Alternatives considered and rejected:**
+
+1. **Keep as-is.** Rejected — it had already been agreed twice (via the two
+   prior narrowings) that most of its remaining content is duplication; the
+   phase table restates `ai-context/done/` + `next-roadmap.md`, and the
+   "how to run" block restates `CLAUDE.md`. Keeping a hand-edited file whose
+   sources of truth are elsewhere is a standing drift risk with no upside.
+2. **Reduce to a versioned changelog only** (the PR #7 reviewer's proposal).
+   Rejected — a version needs a stated scope before "0.3.0" means anything,
+   and this repo has none: five independently-versioned modules (`core`,
+   `redisstore`, `pgstore`, `mongostore`, `etcdstore`), zero git tags, and no
+   root module for them to roll up to (root is `go.work`-only). Inventing a
+   repo-wide version number solely to stamp changelog entries is a scheme
+   built to serve the changelog, not one that tracks anything real, since no
+   release consumes it.
+3. **Delete `PLANS.md`, move the changelog to a root `CHANGELOG.md`**
+   (Keep a Changelog + semver, `ai-context/` left purely process). Rejected
+   for now, not forever — Keep a Changelog's "Unreleased" section sidesteps
+   the versioning problem in (2), so this is the credible fallback if a
+   changelog is wanted again. But the repo owner has ruled this a portfolio /
+   reference implementation with no near-term release
+   (`ai-context/tasks/next-roadmap.md`), so there is no consumer to serve, and
+   the same history is already captured — unglamorously but completely — by
+   `git log`. Adding the file now is release scaffolding for a release that
+   isn't planned, the same reasoning that already keeps `publish-v0.1.0.md`
+   dormant. Revisit if/when a version is actually cut.
+
+**Queue-index question, since `next-roadmap.md`'s own preamble defers to
+this file on it:** yes, a queue index belongs in `ai-context/tasks/` beside
+the per-item files. `next-roadmap.md` is not itself a work item (its own
+preamble already says so — it never moves to `done/` and Test scenarios don't
+apply to it) and was never really competing with `PLANS.md`; the "open work"
+section `PLANS.md` used to carry is now fully superseded by it. Nothing
+further changes about how `next-roadmap.md` works.
+
+**Deferred deliberately** no longer applies — raised during PR #7, parked so
+the backend work could land first, and ruled in this session.

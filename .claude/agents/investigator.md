@@ -45,7 +45,7 @@ The findings have exactly these four sections, in this order:
   `CLAUDE.md` — the toolchain is userspace and containers need the podman socket.
 - Report what you actually found. If the suspected cause turns out not to be the
   cause, say so and say what is.
-- Never edit code, never edit `ai-context/PLANS.md` or `docs/adr/` (Architect-owned).
+- Never edit code, never edit `docs/adr/` (Architect-owned).
 - Your final message back is a 5-line summary: the task file path, the root
   cause in one sentence, and the defect/spec-gap routing. The detail lives in
   the file.

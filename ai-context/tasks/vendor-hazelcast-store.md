@@ -17,4 +17,5 @@ in this folder.
 with the Architect, not implementing directly.
 
 **Note:** Memcached was considered alongside this and dropped from scope —
-see `ai-context/PLANS.md` changelog.
+see `git log -p -- ai-context/PLANS.md` (`_restructure_` changelog entry;
+the file itself is retired, `docs/adr/0016-retire-plans-md.md`).

@@ -13,9 +13,8 @@ logic** — the same conformance suite (`core/tck`) passes against all three.
 ## What lives where
 | Path | Contents |
 |------|----------|
-| `ai-context/PLANS.md` | Progress tracker: phase table + changelog only. **Architect-owned — only the architect edits it.** |
 | `ai-context/README.md` | This guide. |
-| `ai-context/tasks/` | One file per work item (dev or investigation), created by the Architect — including the **Test scenarios** section Dev and the Tester both work from (`ai-context/tasks/README.md`). Moves to `ai-context/done/` only when the tester agent confirms both `/verify` and an end-to-end run pass. |
+| `ai-context/tasks/` | One file per work item (dev or investigation), created by the Architect — including the **Test scenarios** section Dev and the Tester both work from (`ai-context/tasks/README.md`). Moves to `ai-context/done/` only when the tester agent confirms both `/verify` and an end-to-end run pass. `next-roadmap.md` in the same folder is the standing queue index (not itself a work item, doesn't move to `done/`). |
 | `ai-context/done/` | Completed, tester-verified task files. |
 | `docs/adr/` | One file per ratified decision that's hard to reverse, surprising without context, and the result of a real trade-off — see `docs/adr/0007-tasks-done-workflow.md`. |
 | `docs/client/` | User-facing backend docs (`redis.md`, `postgres.md`). |
@@ -34,7 +33,7 @@ authoritative definition** — read those, not a paraphrase here.
 
 | Role | Model | Definition | Owns |
 |------|-------|-----------|------|
-| Architect | opus | `.claude/agents/architect.md` | `ai-context/PLANS.md`, `docs/adr/`, `ai-context/tasks/` (creates) |
+| Architect | opus | `.claude/agents/architect.md` | `docs/adr/`, `ai-context/tasks/` (creates) |
 | Dev | sonnet | `.claude/agents/dev.md` | Go source, tests, `CLAUDE.md` |
 | Investigator | sonnet | `.claude/agents/investigator.md` | Writes findings into the task file it's given |
 | Tester | haiku | `.claude/agents/tester.md` | Moves `ai-context/tasks/*` → `ai-context/done/*` — the only role that does |
@@ -65,5 +64,7 @@ remembering to start it.
 - Postgres v1: `SELECT … FOR UPDATE` only (advisory-lock strategy deferred).
 
 ## Status
-`PLANS.md` is the tracker — phase table, decisions, and open questions. Build/test quick
-reference is in `../CLAUDE.md`; `/verify` runs the suite.
+There is no single progress-tracker file (`ai-context/PLANS.md` was retired, see
+`docs/adr/0016-retire-plans-md.md`). What changed and why: `git log` on `main` plus
+`docs/adr/`. What's done: `ai-context/done/`. What's queued: `ai-context/tasks/next-roadmap.md`.
+Build/test quick reference is in `../CLAUDE.md`; `/verify` runs the suite.
