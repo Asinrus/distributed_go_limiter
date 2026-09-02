@@ -57,8 +57,9 @@ replica keeps its own count and doubling the replicas silently doubles the real 
   server configuration, what is stored.
 - [`docs/client/postgres.md`](docs/client/postgres.md) — schema and how to apply it with
   your own migration tool, sweeping expired rows, server configuration.
-- `ai-context/` — process, roles, and progress (`ai-context/PLANS.md` tracker,
-  `ai-context/tasks/` → `ai-context/done/` work items).
+- `ai-context/` — process, roles, and progress (`ai-context/tasks/next-roadmap.md`
+  tracker, `ai-context/tasks/` → `ai-context/done/` work items; see
+  `docs/adr/0016-retire-plans-md.md`).
 - `docs/adr/` — ratified architecture decisions, one file each.
 - `CLAUDE.md` — code map + build/test commands.
 
@@ -66,7 +67,7 @@ replica keeps its own count and doubling the replicas silently doubles the real 
 Built and tested at `go 1.23`, same version across every module.
 
 ## Status
-v1: single bandwidth per bucket, blocking consume, three backends. See `ai-context/PLANS.md`.
+v1: single bandwidth per bucket, blocking consume, three backends. See `ai-context/tasks/next-roadmap.md`.
 
 ## Test
 The repo root is a `go.work` workspace (not a module), so build/test per module:
