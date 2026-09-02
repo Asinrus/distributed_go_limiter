@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Discover modules
+        id: modules
+        run: |
+          MODULES="$(go list -f '{{.Dir}}' -m)"
+          echo "Discovered modules:"
+          echo "$MODULES"
+          CORE="$(printf '%s\n' "$MODULES" | grep '/core$')"
+          OTHERS="$(printf '%s\n' "$MODULES" | grep -v '/core$')"
+          {
+            echo "core=$CORE"
+            echo "others<<EOF"
+            echo "$OTHERS"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Test core (-race)
+        working-directory: ${{ env.core }}
+        run: |
+          go vet ./...
+          go test -race ./...
+
+      - name: Test remaining modules
+        run: |
+          while IFS= read -r dir; do
+            [ -n "$dir" ] || continue
+            echo "== $dir =="
+            (cd "$dir" && go vet ./... && go test ./...)
+          done <<< "$others"
+
+      - name: gofmt
+        run: |
+          UNFORMATTED="$(gofmt -l .)"
+          if [ -n "$UNFORMATTED" ]; then
+            echo "gofmt found unformatted files:"
+            echo "$UNFORMATTED"
+            exit 1
+          fi
+
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          MODULES="$(go list -f '{{.Dir}}' -m)"
+          while IFS= read -r dir; do
+            [ -n "$dir" ] || continue
+            echo "== $dir =="
+            (cd "$dir" && govulncheck ./...)
+          done <<< "$MODULES"
