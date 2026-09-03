@@ -51,23 +51,41 @@ in AC-51 stands, including `ErrCASRetriesExhausted` inside `ErrStore` — there
 the store is healthy but the operation did not complete through it, which is
 the same decision for the caller.
 
-## Unresolved: open PR #12 implements the opposite
+## Ratified — the owner ruled for the bare context error
 
-**This ADR is not safe to merge on its own.** Open PR #12
-(`asinrus/ctx-cancellation`) already implements AC-50 with the rejected option:
-its executor guards return `storeErr(ctx.Err())`, and it edits `core/bucket.go`
-to argue that a caller catches cancellation and outage together under one
-`errors.Is(err, ErrStore)`. That is internally consistent — both the guard and
-the driver path wrap, so it has no two-shapes problem — and it agrees with
-AC-51 clause 1 as PR #11 words it. It is simply the opposite trade-off: it
-optimises for one check at the call site, this ADR optimises for a caller being
-able to tell a disconnected client from a dead backend.
+Decided. Two arguments settled it, neither of which is in the reasoning above.
 
-Both cannot merge. The choice is the repo owner's, and it is a one-line
-decision with a three-file consequence: pick a shape, then either PR #12's
-`core/command.go` guards or this ADR plus the `storeErr` choke point it
-requires is rewritten, and AC-51 clause 1 either grows the carve-out above or
-does not. Nothing else in `ai-context/tasks/core-ctx-cancellation.md` depends
-on the answer, and nothing in
-`ai-context/tasks/tck-vendor-ctx-conformance.md` (AC-52) does either — its
-assertions are at the store boundary, below where `ErrStore` is applied.
+**It was never about losing the sentinel.** `storeErr`
+(`core/command.go:17-21`) wraps with a double `%w`:
+`fmt.Errorf("%w: %w", ErrStore, err)`. Under the rejected option *both*
+`errors.Is(err, ErrStore)` and `errors.Is(err, context.Canceled)` hold — no
+information is destroyed either way. The only question was whether a
+cancellation is additionally **classified** as a store failure, and the answer
+is that it is not: a departed client and a dead backend call for different
+handling, and one label for both makes the distinction a matter of which
+`errors.Is` the caller happens to write first.
+
+**Stdlib precedent, in this exact architecture.** `database/sql` fronts
+pluggable drivers behind one interface — the same shape as `core` over
+`CASStore`/`LockStore` — and its pre-flight context checks return a bare
+`ctx.Err()`, never tagged as a driver or connection error:
+`$(go env GOROOT)/src/database/sql/sql.go:1327` (`(*DB).conn`), `:1396`
+(the connection-request wait), `:2249` (`(*Tx).grabConn`) and `:2297`
+(`(*Tx).awaitDone`). Verified against the Go **1.25.6** source tree available
+here (`$GOROOT/VERSION`), not the 1.23 the repo pins; the pattern long predates
+both, but that is the tree that was actually read.
+
+## Consequences to apply elsewhere
+
+- **PR #12's guards become `return ctx.Err()`**, and its `core/bucket.go` doc
+  edit — which argues the caller catches both under one
+  `errors.Is(err, ErrStore)` — is dropped. To be applied in that PR by whoever
+  owns it; this branch does not edit it.
+- **AC-51 clause 1 needs the carve-out** described above. Same: applied in
+  PR #11, not here.
+- **Behaviour change for callers.** Code that checks only
+  `errors.Is(err, ErrStore)` and fails open now falls through on cancellation
+  and returns whatever its default branch does. That is the intended outcome —
+  a request whose client has gone should not be served — but it is a change,
+  not a no-op, and a caller that genuinely wants the old grouping must now
+  write `errors.Is(err, ErrStore) || errors.Is(err, context.Canceled)`.
