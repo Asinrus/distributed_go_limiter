@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      # CLAUDE.md mandates GOTOOLCHAIN=local: without it the go-version pin
+      # below is not enforced, since the toolchain silently upgrades to
+      # whatever go.mod/go.work declare. That upgrade is what let stdlib
+      # CVEs past this workflow once (GO-2026-6090/5972) — a rejected build
+      # is the honest failure mode until go.mod actually matches this pin.
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          # go.work pins 1.25.0 (etcdstore/examples' own floor); GOTOOLCHAIN=local
+          # means this must already satisfy it, so it's the tree-wide minimum, not
+          # core's 1.23. 1.25.14 is the current 1.25.x patch, carrying the fixes
+          # for GO-2026-6090 (crypto/tls) and GO-2026-5972 (encoding/asn1).
+          go-version: "1.25.14"
+
+      - name: Discover modules
+        id: modules
+        run: |
+          MODULES="$(go list -f '{{.Dir}}' -m)"
+          echo "Discovered modules:"
+          echo "$MODULES"
+          CORE="$(printf '%s\n' "$MODULES" | grep '/core$')"
+          OTHERS="$(printf '%s\n' "$MODULES" | grep -v '/core$')"
+          {
+            echo "core=$CORE"
+            echo "others<<EOF"
+            echo "$OTHERS"
+            echo "EOF"
+            echo "modules<<EOF"
+            echo "$MODULES"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Test core (-race)
+        working-directory: ${{ env.core }}
+        run: |
+          go vet ./...
+          go test -race ./...
+
+      - name: Test remaining modules
+        run: |
+          FAILED=0
+          while IFS= read -r dir; do
+            [ -n "$dir" ] || continue
+            echo "== $dir =="
+            (cd "$dir" && go vet ./... && go test ./...) || FAILED=1
+          done <<< "$others"
+          exit "$FAILED"
+
+      - name: gofmt
+        run: |
+          UNFORMATTED="$(gofmt -l .)"
+          if [ -n "$UNFORMATTED" ]; then
+            echo "gofmt found unformatted files:"
+            echo "$UNFORMATTED"
+            exit 1
+          fi
+
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          FAILED=0
+          while IFS= read -r dir; do
+            [ -n "$dir" ] || continue
+            echo "== $dir =="
+            (cd "$dir" && govulncheck ./...) || FAILED=1
+          done <<< "$modules"
+          exit "$FAILED"
