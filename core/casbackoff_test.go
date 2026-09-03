@@ -203,6 +203,11 @@ func TestCASBackoff_CancelledDuringDelayReturnsPromptly(t *testing.T) {
 	if errors.Is(err, ErrCASRetriesExhausted) {
 		t.Fatalf("must stop on cancellation, not run out the retry budget: %v", err)
 	}
+	// The one line this task shares with AC-50: an interrupted delay is a departed
+	// caller, not a store outage (docs/adr/0015-cancellation-is-not-a-store-failure.md).
+	if errors.Is(err, ErrStore) {
+		t.Fatalf("interrupted backoff must not be an ErrStore: %v", err)
+	}
 	if sleepCalls != 1 {
 		t.Fatalf("sleep called %d times, want exactly 1 (stop at the first cancellation)", sleepCalls)
 	}

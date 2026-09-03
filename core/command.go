@@ -110,8 +110,11 @@ func (r casRunner) execute(ctx context.Context, key string, cfg Config, now int6
 			return err
 		}
 		if i > 0 {
+			// sleep only fails when ctx ends mid-delay, so the bare context error is
+			// the whole error here — an interrupted backoff is a departed caller, not
+			// a store failure (docs/adr/0015-cancellation-is-not-a-store-failure.md).
 			if err := r.sleep(ctx, casBackoff(i)); err != nil {
-				return storeErr(err)
+				return err
 			}
 		}
 		old, found, err := r.store.GetState(ctx, key)
