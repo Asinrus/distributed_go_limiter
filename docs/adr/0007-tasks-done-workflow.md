@@ -13,3 +13,8 @@ self-attested by whoever did the work. `ai-context/PLANS.md` keeps the
 high-level phase table and changelog; it no longer holds the decision list
 (superseded by `docs/adr/`) or per-question tracking (superseded by task
 files).
+
+The `PLANS.md` clause above is superseded by
+`docs/adr/0016-retire-plans-md.md`: the phase table and changelog were the
+last duplicated sections, and the file is deleted rather than narrowed a third
+time. Everything else here stands.

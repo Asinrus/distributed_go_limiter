@@ -103,3 +103,9 @@ further changes about how `next-roadmap.md` works.
 
 **Deferred deliberately** no longer applies — raised during PR #7, parked so
 the backend work could land first, and ruled in this session.
+
+**Re-tested against PR #19 (`31f757a`), which added 54 lines to `PLANS.md`
+after the ruling.** Ruling unchanged; the reasoning is in
+`docs/adr/0016-retire-plans-md.md`'s "PR #19" section, including the mapping
+of those 54 lines onto ADR 0015 and the two task files added in the same
+commit.

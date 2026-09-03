@@ -65,6 +65,47 @@ the project's own convention against tracking in prose what version control
    flags `publish-v0.1.0.md` as dormant for the same reason. Revisit if/when a
    version is actually cut.
 
+## PR #19 added 54 more lines to `PLANS.md` after this was ruled
+
+Sequencing, stated so a later reader does not have to wonder whether it was
+noticed: this ruling was written against `89b06ff`; PR #19 (`31f757a`) then
+merged to `main` and added an ADR-index line plus five changelog entries to
+`PLANS.md`. **The ruling stands, and the delete keeps nothing back.** Each
+addition was checked against its own source first:
+
+| Added in PR #19 | Where the same content already lives |
+|---|---|
+| ADR index gains `cancellation is not a store failure (0015…)` | `docs/adr/0015-cancellation-is-not-a-store-failure.md` — and the `docs/adr/` listing, which *is* the index |
+| `_ac50-error-shape_`, `_ctx-rulings_` | ADR 0015 (the ruling, `storeErr` as the choke point, the `database/sql` precedent, the migration note) and `ai-context/tasks/core-ctx-cancellation.md:34,67,95` (the rows 5/6 split, the `MemStore` hygiene demotion) |
+| `_ac52-vendor-ctx_`, `_ac52-deferred_` | `ai-context/tasks/tck-vendor-ctx-conformance.md:3,13,61,80` (the deferral, the tier drop, the driver audit against pinned versions, the `export_test.go` and row-7-sibling rulings) |
+| `_ac54-reservation-refund_` | `ai-context/tasks/core-blocking-reservation-refund.md:34,39,57,69` (the `WithoutCancel` write, the capacity clamp, the `ErrReservationNotReleased` shape, the known ceiling) |
+
+Every entry is a shorter paraphrase of a file added in the same commit. The
+task files carry `path:line` evidence, AC ids and Test scenarios; the
+changelog entries carry none of those, so the paraphrase is the lossy copy.
+
+The merge is evidence *for* the ruling rather than against it. Inside that one
+PR, ADR 0015 was first written as contested and then ratified by the owner in
+a later commit — and `PLANS.md`'s index line still read
+`(0015, contested — see below)` (`31f757a:ai-context/PLANS.md:21`) while the
+ADR it indexes read `## Ratified`
+(`docs/adr/0015-cancellation-is-not-a-store-failure.md:54`), with a changelog
+entry further down recording the ratification correctly. One PR, one
+hand-edited file, and the summary already contradicted the source it
+summarises in one place while agreeing with it in another. That is the drift
+alternative (1) predicts, observed rather than hypothesised.
+
+What the merge does show is that a ruling on an unmerged branch does not reach
+a concurrent author: PR #19 was written from a worktree where this branch was
+invisible, so the Architect role will keep writing to `PLANS.md` until the
+role files on `main` stop naming it. That is why the four `.claude/agents/*.md`
+edits are part of this change and not a follow-up.
+
+This is the third and final narrowing of the same file, so it supersedes ADR
+0007's clause that "`ai-context/PLANS.md` keeps the high-level phase table and
+changelog" (`docs/adr/0007-tasks-done-workflow.md:12`); 0007 gets a pointer
+rather than a silent contradiction.
+
 ## Consequence
 
 `ai-context/tasks/next-roadmap.md` is confirmed as the standing queue index
@@ -73,6 +114,9 @@ own preamble already says so) and doesn't move to `done/`; it simply isn't
 competing with anything anymore now that `PLANS.md`'s "open work" section is
 gone. `ai-context/README.md`, `.claude/agents/architect.md`, `.claude/agents/dev.md`,
 `.claude/agents/investigator.md`, and `.claude/agents/tester.md` are updated
-to stop pointing at `PLANS.md`. `CLAUDE.md` and the root `README.md` still
-have one stale pointer each (out of scope for this change — another agent
-owns both files concurrently); tracked as a one-line follow-up.
+to stop pointing at `PLANS.md`. `CLAUDE.md:19` and the root `README.md:60,66`
+still point at it — both are Dev-owned and were held by another agent, so they
+are folded into `ai-context/tasks/next-roadmap.md` row 11 rather than edited
+here. Task files already in `ai-context/done/` keep their `PLANS.md`
+references: they are a record of what was true when the work was gated, and
+`git log -p -- ai-context/PLANS.md` still resolves after the delete.
