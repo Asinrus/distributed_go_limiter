@@ -38,9 +38,17 @@ rather than spinning. This is a CAS-path defect (`redisstore`, `mongostore`,
 **Out of scope**
 - **The `ctx.Done()` check inside the loop belongs to
   `ai-context/tasks/core-ctx-cancellation.md`, not here.** Both tasks touch
-  `core/command.go:45`; that one owns cancellation, this one owns pacing. If
-  they are worked in parallel, the ctx task lands first — a backoff sleep that
-  ignores cancellation is worse than no backoff.
+  `core/command.go:45`; that one owns cancellation, this one owns pacing. The
+  merge was considered and rejected: that task is a behavioral contract with
+  two AC ids and a five-line diff, this one is a pacing design with no AC and
+  an open question about the injectable timer, and merging them makes a
+  shippable correctness fix hostage to a tuning debate in review. The ctx task
+  lands first — a backoff sleep that ignores cancellation is worse than no
+  backoff — and it leaves this one **no open question about the shared line**:
+  the sleep must be interruptible by `ctx.Done()`, and on interruption it
+  returns the bare `context.Canceled` / `context.DeadlineExceeded`, not
+  `ErrStore` (`docs/adr/0015-cancellation-is-not-a-store-failure.md`). Expect a
+  trivial rebase on the loop header, not a design conflict.
 - Changing `CASStore` or any backend. This is `core` only.
 - Adaptive or per-key backoff tuning, and any metric or log of retry counts
   (verbose diagnostics are deferred out of v1, ADR 0001).
@@ -50,9 +58,9 @@ implementation property, not a behavioral criterion — nothing observable to a
 caller changes, which is why the black-box note below says a green sandbox
 proves nothing here. The one part that is behavior, "exhaustion returns
 `ErrCASRetriesExhausted` wrapping `ErrStore`", predates this task and belongs
-to the `ErrStore` criterion still open as
+to the `ErrStore` criterion, now **AC-51** — ratified in
 `ai-context/tasks/q9-errstore-contract-ac.md`; do not assign it a second id
-here. AC-49 and AC-50 are taken by the other two tier-1 tasks.
+here. AC-49 to AC-52 are taken by other tasks.
 
 **Done looks like:** concurrent callers on one key no longer retry in lockstep,
 the retry bound is a stated latency budget rather than an arbitrary number, the

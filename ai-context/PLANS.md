@@ -18,7 +18,8 @@ SELECT-FOR-UPDATE over advisory locks (0003), TEXT bucket keys, no mapper
 backend TCK (0006), pgstore identifiers are one quoted name (0008), pgstore
 creates no row for a read-only miss (0010), tester is black-box only (0011),
 TTL is not a correctness mechanism (0012), Architect scopes a task's test
-coverage (0013). Smaller settled facts that don't clear the ADR bar (module
+coverage (0013), cancellation is not a store failure (0015, contested — see
+below). Smaller settled facts that don't clear the ADR bar (module
 path, Go toolchain installed by the user) aren't tracked anywhere formal —
 they're just true of the repo.
 
@@ -230,3 +231,54 @@ folded into `docs/adr/` (0001-0006) rather than repeated here.
   CI files had their "Ruling (repo owner)" headers corrected to separate the
   owner's direction (one version; yes to GitHub CI) from the Architect's
   derivation (1.23 from the measured floors; the job design).
+- _ac50-error-shape_: ruled the error shape `core-ctx-cancellation.md` was
+  deferring — a cancelled or expired context returns the **bare** context
+  error, not `ErrStore` (ADR 0015, a carve-out from AC-51 clause 1 and a
+  narrowing of ADR 0002), with `storeErr` (`core/command.go:17`) as the single
+  choke point so a driver-noticed and a guard-noticed cancellation cannot
+  differ by a race; rejected the `ErrStore`-wrapped variant because the
+  documented check is `ErrStore` first, which routes every client disconnect
+  into the outage branch. **Contested and unresolved:** open PR #12 already
+  implements the opposite, consistently, and both cannot merge — the owner
+  picks. Also rejected merging roadmap rows 5 and 6: same loop, but a
+  correctness fix should not wait on a backoff-tuning review; row 6 settles
+  the shared line for row 5 instead (interruptible sleep, bare context error).
+  Kept the `MemStore` ctx guards, demoted to hygiene with the warning that an
+  AC-50 test driven through `MemStore` passes with the executor guard missing.
+- _ac52-vendor-ctx_: new task `ai-context/tasks/tck-vendor-ctx-conformance.md`
+  (roadmap row 20, tier 1). "Every backend honours ctx" is currently an
+  assertion in prose; AC-50's executor guard makes it untestable through
+  `Bucket`, so the case has to run against the `CASStore`/`LockStore` value.
+  Ruled a sibling of row 7 rather than part of it — different boundary,
+  different entry-point signature — and ruled it reachable via `export_test.go`
+  rather than by exporting `NewStore` from `redisstore`/`etcdstore`, since
+  widening the public API is not a test task's call. It is unblocked by the
+  error-shape dispute: `ErrStore` is applied above the store.
+- _ctx-rulings_: the owner ratified ADR 0015 — bare `ctx.Err()`, not
+  `ErrStore`. The two arguments that settled it are now in the ADR and were not
+  in the original reasoning: `storeErr`'s double `%w` means the rejected option
+  lost no information either, so the question was only whether cancellation is
+  *classified* as a store failure; and `database/sql`, which fronts pluggable
+  drivers behind one interface exactly as `core` does, returns a bare
+  `ctx.Err()` from its pre-flight checks (`sql.go:1327,1396,2249,2297`, Go
+  1.25.6 tree). Consequences recorded for other branches, not applied here:
+  PR #12's guards become `return ctx.Err()` and AC-51 clause 1 grows the
+  carve-out. Migration note in the ADR — a caller checking only `ErrStore` now
+  falls through on cancellation, which is intended.
+- _ac52-deferred_: `tck-vendor-ctx-conformance.md` was filed on a false
+  premise. A driver audit against this repo's own pins found all four already
+  return `errors.Is(err, context.Canceled)` — etcd included, via `ContextError`
+  substituting `ctx.Err()` for a gRPC status code, which was the predicted
+  failure. Reframed from bug hunt to regression guard, dropped to tier 2 and
+  deferred pending the etcd-scope question. The real gap stands: no test
+  anywhere exercises a cancelled context against a real backend.
+- _ac54-reservation-refund_: new task
+  `ai-context/tasks/core-blocking-reservation-refund.md` (AC-54, roadmap row
+  22, tier 1). `reserve` persists the deduction before the sleep, so a cancelled
+  `Consume` charges tokens to nobody; `core/blocking.go:22-23` documents that as
+  intended and the owner ruled it is not. Compensating release through the
+  executor, best-effort but reported: on refund failure the caller gets
+  `ctx.Err()` wrapped with a new `ErrReservationNotReleased` sentinel, and
+  deliberately **not** `ErrStore` — tagging a departed client as a store
+  failure is what ADR 0015 rejected. Known ceiling named and not solved: a CAS
+  that commits but loses its reply still over-counts.
