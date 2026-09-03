@@ -16,14 +16,12 @@ var (
 	// ErrInvalidConfig is returned by NewLocalBucket / ProxyManager.Bucket when a
 	// Config is not usable (non-positive capacity, or no refill rate set).
 	ErrInvalidConfig = errors.New("core: invalid bucket configuration")
-	// ErrStore reports that the backing store failed — I/O error, timeout,
-	// cancellation, or unavailability. Every error crossing the store boundary
-	// wraps it, and the backend's own error stays reachable via errors.Is/As.
-	// A cancelled or expired ctx wraps the same way: the underlying
-	// context.Canceled / context.DeadlineExceeded stays reachable via errors.Is,
-	// so a caller can tell "my context ended" apart from "the store is down" while
-	// still catching both under one errors.Is(err, ErrStore) check.
-	// core does not decide fail-open vs fail-closed; the caller checks
+	// ErrStore reports that the backing store failed — I/O error, timeout, or
+	// unavailability. Every error crossing the store boundary wraps it, and the
+	// backend's own error stays reachable via errors.Is/As. A cancelled or expired
+	// ctx is not one of these: it comes back as the bare context.Canceled /
+	// context.DeadlineExceeded, so a departed client is never mistaken for an
+	// outage. core does not decide fail-open vs fail-closed; the caller checks
 	// errors.Is(err, ErrStore). Distributed buckets only.
 	ErrStore = errors.New("core: store failure")
 )

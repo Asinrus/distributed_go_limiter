@@ -13,10 +13,19 @@ import (
 var ErrCASRetriesExhausted = fmt.Errorf("%w: compare-and-swap retries exhausted", ErrStore)
 
 // storeErr tags an error that crossed the store boundary, keeping the backend's own
-// error unwrappable underneath.
-func storeErr(err error) error {
+// error unwrappable underneath — unless the context is done, in which case the
+// context's own error is returned instead and the underlying one dropped. Both
+// halves matter: a cancelled client is not a store outage, and this is the single
+// place where that shape is decided, so a driver that notices the cancellation
+// first cannot report it differently from the executor's own guards. The dropped
+// error is almost always the driver's own context.Canceled
+// (docs/adr/0015-cancellation-is-not-a-store-failure.md).
+func storeErr(ctx context.Context, err error) error {
 	if err == nil {
 		return nil
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return ctxErr
 	}
 	return fmt.Errorf("%w: %w", ErrStore, err)
 }
@@ -47,11 +56,11 @@ func (r casRunner) execute(ctx context.Context, key string, cfg Config, now int6
 		// instead of dependent on whether that driver's client honours ctx, and it
 		// catches cancellation arriving between a successful read and the retry too.
 		if err := ctx.Err(); err != nil {
-			return storeErr(err)
+			return err
 		}
 		old, found, err := r.store.GetState(ctx, key)
 		if err != nil {
-			return storeErr(err)
+			return storeErr(ctx, err)
 		}
 		s, err := loadState(old, found, cfg, now)
 		if err != nil {
@@ -66,7 +75,7 @@ func (r casRunner) execute(ctx context.Context, key string, cfg Config, now int6
 		}
 		swapped, err := r.store.CompareAndSwap(ctx, key, expected, encodeState(s), r.ttl)
 		if err != nil {
-			return storeErr(err)
+			return storeErr(ctx, err)
 		}
 		if swapped {
 			return nil
@@ -77,7 +86,7 @@ func (r casRunner) execute(ctx context.Context, key string, cfg Config, now int6
 }
 
 func (r casRunner) remove(ctx context.Context, key string) error {
-	return storeErr(r.store.Remove(ctx, key))
+	return storeErr(ctx, r.store.Remove(ctx, key))
 }
 
 // --- exclusive lock (Postgres) ----------------------------------------------
@@ -88,10 +97,10 @@ type lockRunner struct {
 }
 
 func (r lockRunner) execute(ctx context.Context, key string, cfg Config, now int64, op bucketOp) error {
-	// Same choke point as casRunner: reject work before it starts rather than trust
-	// every LockStore.Do implementation to notice cancellation on its own.
+	// Same guard as casRunner: reject work before it starts rather than trust every
+	// LockStore.Do implementation to notice cancellation on its own.
 	if err := ctx.Err(); err != nil {
-		return storeErr(err)
+		return err
 	}
 	// Our own callback failure (a decode error) comes back out through Do's return
 	// value; keep hold of it so it is not mistaken for a store failure.
@@ -110,11 +119,11 @@ func (r lockRunner) execute(ctx context.Context, key string, cfg Config, now int
 	if ownErr != nil && errors.Is(err, ownErr) {
 		return ownErr
 	}
-	return storeErr(err)
+	return storeErr(ctx, err)
 }
 
 func (r lockRunner) remove(ctx context.Context, key string) error {
-	return storeErr(r.store.Remove(ctx, key))
+	return storeErr(ctx, r.store.Remove(ctx, key))
 }
 
 // loadState decodes stored bytes, or builds a fresh full bucket when absent
