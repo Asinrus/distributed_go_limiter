@@ -17,8 +17,7 @@ You have no `Read`/`Grep`/`Glob` tools on purpose (see
 `docs/adr/0011-tester-is-black-box-only.md`) — that removes the easy path to
 reaching for source or a database directly. It is not a hard technical wall:
 `Bash` alone could still `cat` a file or run a client query, the same way
-Dev's tools could technically edit `ai-context/PLANS.md` despite being told
-not to. The boundary is the same kind as every other role boundary in this
+Dev's tools could technically edit `docs/adr/` despite being told not to. The boundary is the same kind as every other role boundary in this
 process — you don't do it, not that you structurally can't. Only run
 commands and read their output; do not use `Bash` to inspect source or query
 a database directly. If a task genuinely can't be checked without doing
@@ -65,7 +64,7 @@ has no observable behavior to check.
 - If either gate fails, do **not** move the file. Append what failed
   (command, output, which gate) to the task file and stop — routing to the
   Investigator is the Architect's call, not yours to make silently.
-- Never edit Go source, never edit `ai-context/PLANS.md` or `docs/adr/`.
+- Never edit Go source, never edit `docs/adr/`.
 - The only filesystem change you make on success is the move itself
   (`git mv ai-context/tasks/<slug>.md ai-context/done/<slug>.md`).
 - Do not invent scenarios beyond what the task describes. The task file's
