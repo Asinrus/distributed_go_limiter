@@ -1,5 +1,11 @@
 # One Go version for development and consumers, no toolchain directive
 
+**Superseded by `docs/adr/0017-one-go-directive-tracks-the-dependency-floor.md`.**
+The owner's ruling — one version, not two — stands; the number `1.23` and the
+per-module escape hatch added by the amendment below do not. The hatch fired three times in
+days and reintroduced the two-number split it was meant to avoid. Kept here as
+the record of how the pin was derived and why it did not hold.
+
 The owner ruled that every `go.mod` and `go.work` in the repo states the same
 `go` directive — one version, not a lower "consumer minimum" alongside a
 higher version contributors actually build with. Rejected: pinning a

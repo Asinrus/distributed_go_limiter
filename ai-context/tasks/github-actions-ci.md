@@ -16,8 +16,15 @@ podman socket that a runner does not have, and setting them there would break
 the run rather than fix it.
 
 **In scope**
-- One workflow on push and pull request, Go **1.23** (see
-  `ai-context/tasks/go-version-1-23.md`).
+- One workflow on push and pull request, on the newest patch of the minor line
+  `go.work` declares — today **1.25.14**, with `GOTOOLCHAIN=local` so the pin is
+  enforced instead of silently upgraded. This line originally said 1.23; that
+  was wrong once the dependency floor moved, and the workflow's `1.25.14` is
+  correct as written. `GOTOOLCHAIN=local` makes a pin below `go.work`'s
+  directive a hard build failure, so CI cannot sit at 1.23 while any module
+  requires 1.25.0. Tracking the *patch* rather than 1.25.0 exactly is what
+  covers stdlib advisories on the line (GO-2026-6090, GO-2026-5972). See
+  `docs/adr/0017-one-go-directive-tracks-the-dependency-floor.md`.
 - **Discover the modules**, do not hardcode them. `/verify` already does this
   (`.claude/commands/verify.md:32-37`, `go list -f '{{.Dir}}' -m`) and the
   workflow must use the same mechanism, so adding a seventh module never means
