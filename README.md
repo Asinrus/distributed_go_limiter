@@ -63,7 +63,9 @@ replica keeps its own count and doubling the replicas silently doubles the real 
 - `CLAUDE.md` — code map + build/test commands.
 
 ## Go version
-Built and tested at `go 1.23`, same version across every module.
+Built and tested at `go 1.25.0`, same version across every module and `go.work`.
+The number tracks the highest floor the dependencies force — see
+[`docs/adr/0017-one-go-directive-tracks-the-dependency-floor.md`](docs/adr/0017-one-go-directive-tracks-the-dependency-floor.md).
 
 ## Status
 v1: single bandwidth per bucket, blocking consume, three backends. See `ai-context/tasks/next-roadmap.md`.
