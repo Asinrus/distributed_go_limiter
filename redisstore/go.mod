@@ -4,7 +4,7 @@ go 1.23
 
 require (
 	github.com/asinrus/distributed_go_limiter/core v0.0.0
-	github.com/redis/go-redis/v9 v9.6.1
+	github.com/redis/go-redis/v9 v9.6.3
 	github.com/stretchr/testify v1.9.0
 	github.com/testcontainers/testcontainers-go/modules/redis v0.33.0
 )
