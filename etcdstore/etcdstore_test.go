@@ -104,6 +104,119 @@ func TestEtcdConformance(t *testing.T) {
 	})
 }
 
+// countLeases returns the number of leases currently live on the cluster.
+// Every write in these tests goes through a TTL'd bucket, so a live lease
+// count is a direct proxy for "how many server-side lease objects has this
+// code left behind" — the thing etcdstore-lease-leak.md is about.
+func countLeases(t *testing.T, ctx context.Context, cli *clientv3.Client) int {
+	t.Helper()
+	resp, err := cli.Leases(ctx)
+	require.NoError(t, err)
+	return len(resp.Leases)
+}
+
+// TestEtcdLeaseCountBoundedByLiveKeys is the assertion that fails against the
+// pre-fix code: it grants a fresh lease on every write, so N sequential
+// writes to one key left N live leases (the old lease displaced by each
+// overwrite was never revoked, only left to expire on its own). A single key
+// must produce a bounded lease count regardless of how many times it is
+// written.
+func TestEtcdLeaseCountBoundedByLiveKeys(t *testing.T) {
+	cli := startEtcd(t)
+	ctx := context.Background()
+	pm := etcdstore.NewProxyManager(cli, etcdstore.WithTTL(time.Hour))
+	cfg := core.NewConfig(core.NewBandwidth(1000).RefillGreedy(1, time.Hour))
+
+	b, err := pm.Bucket("lease-bound", cfg)
+	require.NoError(t, err)
+
+	before := countLeases(t, ctx, cli)
+
+	const writes = 20
+	for i := 0; i < writes; i++ {
+		ok, err := b.TryConsume(ctx, 1)
+		require.NoError(t, err)
+		require.True(t, ok)
+	}
+
+	assert.LessOrEqual(t, countLeases(t, ctx, cli)-before, 1,
+		"lease count must grow by at most the one live key, not by write count (%d)", writes)
+}
+
+// TestEtcdLostCASRaceLeavesNoLease drives concurrent writers at the same key
+// so some of core's internal CAS attempts lose their race. A lease granted
+// for a losing attempt is never attached to a key by the Txn (Then never
+// runs), so if it isn't revoked explicitly it survives as an orphan until its
+// TTL lapses on its own. The lease count after all writers finish must still
+// be bounded by the one live key, not by the number of attempts (winners +
+// losers) it took to get there.
+func TestEtcdLostCASRaceLeavesNoLease(t *testing.T) {
+	cli := startEtcd(t)
+	ctx := context.Background()
+	pm := etcdstore.NewProxyManager(cli, etcdstore.WithTTL(time.Hour))
+	cfg := core.NewConfig(core.NewBandwidth(1000).RefillGreedy(1, time.Hour))
+
+	b, err := pm.Bucket("lease-race", cfg)
+	require.NoError(t, err)
+
+	before := countLeases(t, ctx, cli)
+
+	const writers = 10
+	done := make(chan struct{}, writers)
+	for i := 0; i < writers; i++ {
+		go func() {
+			defer func() { done <- struct{}{} }()
+			ok, err := b.TryConsume(ctx, 1)
+			assert.NoError(t, err)
+			assert.True(t, ok)
+		}()
+	}
+	for i := 0; i < writers; i++ {
+		<-done
+	}
+
+	assert.LessOrEqual(t, countLeases(t, ctx, cli)-before, 1,
+		"a lost CAS race must not leave an orphan lease behind")
+}
+
+// TestEtcdLeaseCacheAcrossWriters drives two independent *ProxyManager
+// instances (standing in for two processes, since each owns its own private
+// leases cache) alternately writing the same key. A cache keyed by "the
+// lease this instance last wrote" cannot see the other instance's lease: it
+// would keep calling KeepAliveOnce on its own now-detached lease forever
+// (an orphan that never expires) while never refreshing the lease actually
+// attached to the key. Bounding the live lease count here is the proof the
+// cache is instead sourced from what GetState observes attached to the key,
+// not from local write history.
+func TestEtcdLeaseCacheAcrossWriters(t *testing.T) {
+	cli := startEtcd(t)
+	ctx := context.Background()
+	cfg := core.NewConfig(core.NewBandwidth(1000).RefillGreedy(1, time.Hour))
+
+	pmA := etcdstore.NewProxyManager(cli, etcdstore.WithTTL(time.Hour))
+	pmB := etcdstore.NewProxyManager(cli, etcdstore.WithTTL(time.Hour))
+	bA, err := pmA.Bucket("lease-cross-writer", cfg)
+	require.NoError(t, err)
+	bB, err := pmB.Bucket("lease-cross-writer", cfg)
+	require.NoError(t, err)
+
+	before := countLeases(t, ctx, cli)
+
+	const rounds = 10
+	for i := 0; i < rounds; i++ {
+		ok, err := bA.TryConsume(ctx, 1)
+		require.NoError(t, err)
+		require.True(t, ok)
+
+		ok, err = bB.TryConsume(ctx, 1)
+		require.NoError(t, err)
+		require.True(t, ok)
+	}
+
+	assert.LessOrEqual(t, countLeases(t, ctx, cli)-before, 1,
+		"alternating writers on the same key must converge on one lease, not one per writer")
+}
+
 // AC-45: expire-after-write on etcd (short TTL + real wait for lease expiry).
 func TestEtcdExpiration(t *testing.T) {
 	cli := startEtcd(t)
