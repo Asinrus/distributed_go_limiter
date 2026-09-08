@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"time"
 )
 
@@ -30,7 +31,54 @@ func storeErr(ctx context.Context, err error) error {
 	return fmt.Errorf("%w: %w", ErrStore, err)
 }
 
-const maxCASRetries = 100
+// defaultMaxCASRetries is the retry budget when the caller sets none. It bounds
+// both the number of store round trips and, since losing attempts back off, the
+// wall-clock cost of a call: the loop backs off before every retry but the first,
+// so n attempts cost at most (n-1)*backoffCap of sleep — 63*32ms = 2016ms at this
+// default — plus n GetState/CompareAndSwap round trips. WithMaxCASRetries trades
+// the two off.
+//
+// Measured against core/tck's AC-42 (8 workers x 250 ops on one hot key) on
+// every real CASStore backend, not just MemStore, where a lost race costs a
+// network round trip rather than nanoseconds: 16 failed against mongostore
+// with retries exhausted, and 32 flaked the same way on a repeat run. 64 held
+// across 2 redis runs, 3 mongostore runs, and 3 etcd runs — still a bounded
+// latency budget, unlike the prior unbounded-cost 100 immediate attempts.
+const defaultMaxCASRetries = 64
+
+const (
+	backoffBase = time.Millisecond      // delay before the first retry
+	backoffCap  = 32 * time.Millisecond // delay stops growing past this
+)
+
+// casBackoff picks the delay before the attempt-th retry (attempt >= 1) using full
+// jitter: uniform over [0, min(cap, base*2^(attempt-1))). Full jitter, rather than a
+// fixed or capped-exponential-only delay, is what actually disperses a losing herd —
+// a fixed backoff has every loser retry in lockstep and just resynchronizes them one
+// step later.
+func casBackoff(attempt int) time.Duration {
+	d := backoffBase << uint(attempt-1)
+	if d <= 0 || d > backoffCap { // <=0 catches shift overflow for large attempt
+		d = backoffCap
+	}
+	return time.Duration(rand.Int63n(int64(d)))
+}
+
+// sleepCtx blocks for d or until ctx is done, whichever comes first, so a backoff
+// delay never outlives a cancelled caller. The default casRunner.sleep.
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return nil
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-t.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
 
 // bucketOp mutates a bucketState and reports whether it changed, so read-only and
 // rejected ops skip the write. The same op body runs on every provider.
@@ -46,17 +94,30 @@ type runner interface {
 // --- compare-and-swap (Redis, in-memory) ------------------------------------
 
 type casRunner struct {
-	store CASStore
-	ttl   time.Duration
+	store      CASStore
+	ttl        time.Duration
+	maxRetries int
+	// sleep waits out a backoff delay, cancellable via ctx. Defaults to sleepCtx;
+	// overridden in tests so backoff pacing is asserted without sleeping in
+	// wall-clock time.
+	sleep func(ctx context.Context, d time.Duration) error
 }
 
 func (r casRunner) execute(ctx context.Context, key string, cfg Config, now int64, op bucketOp) error {
-	for i := 0; i < maxCASRetries; i++ {
+	for i := 0; i < r.maxRetries; i++ {
 		// Checked here rather than left to the store: uniform across every backend
 		// instead of dependent on whether that driver's client honours ctx, and it
 		// catches cancellation arriving between a successful read and the retry too.
 		if err := ctx.Err(); err != nil {
 			return err
+		}
+		if i > 0 {
+			// sleep only fails when ctx ends mid-delay, so the bare context error is
+			// the whole error here — an interrupted backoff is a departed caller, not
+			// a store failure (docs/adr/0015-cancellation-is-not-a-store-failure.md).
+			if err := r.sleep(ctx, casBackoff(i)); err != nil {
+				return err
+			}
 		}
 		old, found, err := r.store.GetState(ctx, key)
 		if err != nil {
