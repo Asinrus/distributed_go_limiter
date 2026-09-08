@@ -31,7 +31,7 @@ of `go.work`: the workspace unifies `golang.org/x/text` up to the v0.34.0 that
 the `examples` module pulls in, and the floor has to be measured with the
 workspace off. Do not re-derive it inside the workspace.
 
-Today every `go.mod` and `go.work` says `go 1.26.5`.
+When this task was written, every `go.mod` and `go.work` said `go 1.26.5`.
 
 **In scope**
 - `go.work` and the six `go.mod` files (`core`, `redisstore`, `pgstore`,
@@ -75,3 +75,23 @@ language version broke no behavior; no new scenario is needed.
 it must pass at 1.23 in every module, and Dev reports the per-module result
 rather than only the aggregate, since this task's whole risk is one module
 failing where the others pass.
+
+## Closing note: the acceptance criterion was not met
+
+**"All seven files say `go 1.23`" is false and will not become true.** The pin
+landed (`44ba306`) and the tester confirmed it (`bd6b316`), but four security
+bumps then moved it: `pgstore`, `etcdstore`, `examples`, and `go.work` now say
+`go 1.25.0`, and CI pins `1.25.14`. Grading this task as passed would mean
+grading it against ADR 0014's escape hatch — a criterion this file never
+carried. It did not pass as written.
+
+The trap clause above — "if a module genuinely needs a post-1.23 feature, raise
+that module's directive" — was about *language features*. What actually
+happened is a *dependency's* declared floor, which recurs with every advisory
+rather than once per language release. That distinction is what broke the pin,
+and it is why `docs/adr/0017-one-go-directive-tracks-the-dependency-floor.md`
+supersedes ADR 0014 instead of amending it a second time.
+
+This file stays in `ai-context/done/` as the record of the pin and why it did
+not hold; none of the work it describes needs redoing. What replaces it is
+`ai-context/tasks/go-directive-one-number.md`.
