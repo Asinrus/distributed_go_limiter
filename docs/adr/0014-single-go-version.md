@@ -33,3 +33,18 @@ All seven files (`go.work`, `core`, `redisstore`, `pgstore`, `mongostore`,
 `etcdstore`, `examples`) built, `go vet`'d, and `go test`'d clean at go1.23 —
 no module needed a post-1.23 language feature, so no directive was raised
 above the project-wide number.
+
+## Amendment: a transitive security floor forced two modules above 1.23
+
+Closing GO-2026-6061 (`ai-context/tasks/grpc-vuln-bump.md`) required
+`google.golang.org/grpc` v1.82.1, which itself declares `go 1.25.0`. That
+raised the floor for the two modules that pull grpc transitively —
+`etcdstore` (via `go.etcd.io/etcd/client/v3`) and `examples` (via
+`testcontainers-go` and the etcd client) — to `go 1.25.0`. `core`,
+`redisstore`, `pgstore`, and `mongostore` do not depend on grpc in a way
+`govulncheck` finds reachable, so they stay at `go 1.23` unchanged.
+`go.work`'s directive follows suit at `go 1.25.0`, the minimum that
+satisfies its highest member. This is the escape hatch this ADR's sibling
+task (`ai-context/tasks/go-version-1-23.md`) already named: a dependency's
+security floor, not a language feature either module wanted, forced the
+raise, and it is scoped to the two modules that actually need it.
