@@ -71,9 +71,10 @@ Root is a `go.work` workspace, **not** a module — build/test per module.
   (shared across nodes). Both injectable via `WithClock` for tests.
 
 ## Go version
-One version, `go 1.23`, for every `go.mod` and `go.work` — development and any
-future consumer alike. No `toolchain` directive, no separate dev pin. See
-`docs/adr/0014-single-go-version.md` for the derivation.
+One version, `go 1.25.0`, for every `go.mod` and `go.work` — no per-module
+exception, no `toolchain` directive. The number tracks the highest floor any
+module's dependencies force, so it moves only when an upgrade forces it. See
+`docs/adr/0017-one-go-directive-tracks-the-dependency-floor.md`.
 
 ## Build & test
 `/verify` discovers the workspace modules, runs the suite, and routes failures to the

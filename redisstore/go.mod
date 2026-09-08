@@ -1,6 +1,6 @@
 module github.com/asinrus/distributed_go_limiter/redisstore
 
-go 1.23
+go 1.25.0
 
 require (
 	github.com/asinrus/distributed_go_limiter/core v0.0.0
