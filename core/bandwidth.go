@@ -47,6 +47,9 @@ func (b Bandwidth) RefillIntervally(tokens int64, period time.Duration) Bandwidt
 }
 
 // WithInitialTokens overrides the starting token count (default = capacity).
+// n must be in [0, capacity]; a bucket cannot start with a burst it could
+// never otherwise earn, or with a negative balance. Out-of-range values are
+// rejected by Config.valid(), not clamped.
 func (b Bandwidth) WithInitialTokens(n int64) Bandwidth {
 	b.initialTokens = n
 	return b
@@ -55,7 +58,9 @@ func (b Bandwidth) WithInitialTokens(n int64) Bandwidth {
 // Capacity returns the maximum number of tokens.
 func (b Bandwidth) Capacity() int64 { return b.capacity }
 
-// valid reports whether the bandwidth is usable (positive capacity and a refill rate).
+// valid reports whether the bandwidth is usable: positive capacity, a refill
+// rate, and an initial token count that fits within capacity.
 func (b Bandwidth) valid() bool {
-	return b.capacity > 0 && b.refillTokens > 0 && b.refillPeriodNanos > 0
+	return b.capacity > 0 && b.refillTokens > 0 && b.refillPeriodNanos > 0 &&
+		b.initialTokens >= 0 && b.initialTokens <= b.capacity
 }
