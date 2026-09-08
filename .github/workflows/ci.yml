@@ -9,11 +9,9 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     env:
-      # CLAUDE.md mandates GOTOOLCHAIN=local: without it the go-version pin
-      # below is not enforced, since the toolchain silently upgrades to
-      # whatever go.mod/go.work declare. That upgrade is what let stdlib
-      # CVEs past this workflow once (GO-2026-6090/5972) — a rejected build
-      # is the honest failure mode until go.mod actually matches this pin.
+      # Without this the go-version pin below is not enforced: the toolchain
+      # silently upgrades to whatever go.mod/go.work declare, and that upgrade
+      # once let stdlib CVEs past this workflow.
       GOTOOLCHAIN: local
     steps:
       - uses: actions/checkout@v4
