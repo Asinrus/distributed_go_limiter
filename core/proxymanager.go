@@ -11,12 +11,16 @@ import (
 type ProxyManager struct {
 	run runner
 	now func() int64
+	// maxCASRetries is kept here as well as in casRunner so Bucket can reject an
+	// out-of-range WithMaxCASRetries on either kind of manager.
+	maxCASRetries int
 }
 
 type proxyConfig struct {
-	now   func() int64
-	ttl   time.Duration
-	sleep func(ctx context.Context, d time.Duration) error
+	now           func() int64
+	ttl           time.Duration
+	sleep         func(ctx context.Context, d time.Duration) error
+	maxCASRetries int
 }
 
 // ProxyOption configures a ProxyManager.
@@ -33,8 +37,24 @@ func WithExpireAfterWrite(ttl time.Duration) ProxyOption {
 	return func(c *proxyConfig) { c.ttl = ttl }
 }
 
+// WithMaxCASRetries sets how many compare-and-swap attempts one operation makes
+// on a contended key before giving up with ErrCASRetriesExhausted (default 64).
+//
+// n is also a latency budget, which is the reason to tune it: losing attempts
+// back off with full jitter capped at 32ms, so n attempts cost up to (n-1)*32ms
+// of sleep — roughly 2016ms at the default — plus n store round trips. Raise it
+// for hotter keys or a slower store, lower it to fail fast and shed load. The
+// default was measured against the conformance suite's contention case on every
+// real backend; 16 and 32 both exhausted the budget there.
+//
+// n must be >= 1; out-of-range values are rejected by Bucket, not clamped. Has
+// no effect on a lock-based backend, which serializes rather than retries.
+func WithMaxCASRetries(n int) ProxyOption {
+	return func(c *proxyConfig) { c.maxCASRetries = n }
+}
+
 func newProxyConfig(opts ...ProxyOption) proxyConfig {
-	c := proxyConfig{now: wallNanos, sleep: sleepCtx}
+	c := proxyConfig{now: wallNanos, sleep: sleepCtx, maxCASRetries: defaultMaxCASRetries}
 	for _, o := range opts {
 		o(&c)
 	}
@@ -45,21 +65,23 @@ func newProxyConfig(opts ...ProxyOption) proxyConfig {
 // in-memory). Backends call this from their own constructor.
 func NewCASProxyManager(store CASStore, opts ...ProxyOption) *ProxyManager {
 	c := newProxyConfig(opts...)
-	return &ProxyManager{run: casRunner{store: store, ttl: c.ttl, sleep: c.sleep}, now: c.now}
+	run := casRunner{store: store, ttl: c.ttl, maxRetries: c.maxCASRetries, sleep: c.sleep}
+	return &ProxyManager{run: run, now: c.now, maxCASRetries: c.maxCASRetries}
 }
 
 // NewLockProxyManager builds a ProxyManager over an exclusive-lock store (Postgres).
 func NewLockProxyManager(store LockStore, opts ...ProxyOption) *ProxyManager {
 	c := newProxyConfig(opts...)
-	return &ProxyManager{run: lockRunner{store: store, ttl: c.ttl}, now: c.now}
+	return &ProxyManager{run: lockRunner{store: store, ttl: c.ttl}, now: c.now, maxCASRetries: c.maxCASRetries}
 }
 
 // Bucket returns a Bucket for key with the given configuration. Nodes sharing a
 // key must use matching configs (config is not stored in v1). It returns
-// ErrInvalidConfig if cfg has no positive capacity or no refill rate — validating
-// here means every Bucket that exists is usable, so no operation has to re-check.
+// ErrInvalidConfig if cfg has no positive capacity or no refill rate, or if the
+// manager was built with a non-positive WithMaxCASRetries — validating here means
+// every Bucket that exists is usable, so no operation has to re-check.
 func (pm *ProxyManager) Bucket(key string, cfg Config) (Bucket, error) {
-	if !cfg.valid() {
+	if !cfg.valid() || pm.maxCASRetries < 1 {
 		return nil, ErrInvalidConfig
 	}
 	return &proxyBucket{pm: pm, key: key, cfg: cfg}, nil

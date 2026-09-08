@@ -31,11 +31,12 @@ func storeErr(ctx context.Context, err error) error {
 	return fmt.Errorf("%w: %w", ErrStore, err)
 }
 
-// maxCASRetries bounds both the number of store round trips and, now that losing
-// attempts back off, the wall-clock cost of a call that is ultimately rejected.
-// The loop backs off before every retry but the first, so the worst case is
-// (maxCASRetries-1)*backoffCap = 63*32ms = 2016ms of sleep plus 64
-// GetState/CompareAndSwap round trips.
+// defaultMaxCASRetries is the retry budget when the caller sets none. It bounds
+// both the number of store round trips and, since losing attempts back off, the
+// wall-clock cost of a call: the loop backs off before every retry but the first,
+// so n attempts cost at most (n-1)*backoffCap of sleep — 63*32ms = 2016ms at this
+// default — plus n GetState/CompareAndSwap round trips. WithMaxCASRetries trades
+// the two off.
 //
 // Measured against core/tck's AC-42 (8 workers x 250 ops on one hot key) on
 // every real CASStore backend, not just MemStore, where a lost race costs a
@@ -43,7 +44,7 @@ func storeErr(ctx context.Context, err error) error {
 // with retries exhausted, and 32 flaked the same way on a repeat run. 64 held
 // across 2 redis runs, 3 mongostore runs, and 3 etcd runs — still a bounded
 // latency budget, unlike the prior unbounded-cost 100 immediate attempts.
-const maxCASRetries = 64
+const defaultMaxCASRetries = 64
 
 const (
 	backoffBase = time.Millisecond      // delay before the first retry
@@ -93,8 +94,9 @@ type runner interface {
 // --- compare-and-swap (Redis, in-memory) ------------------------------------
 
 type casRunner struct {
-	store CASStore
-	ttl   time.Duration
+	store      CASStore
+	ttl        time.Duration
+	maxRetries int
 	// sleep waits out a backoff delay, cancellable via ctx. Defaults to sleepCtx;
 	// overridden in tests so backoff pacing is asserted without sleeping in
 	// wall-clock time.
@@ -102,7 +104,7 @@ type casRunner struct {
 }
 
 func (r casRunner) execute(ctx context.Context, key string, cfg Config, now int64, op bucketOp) error {
-	for i := 0; i < maxCASRetries; i++ {
+	for i := 0; i < r.maxRetries; i++ {
 		// Checked here rather than left to the store: uniform across every backend
 		// instead of dependent on whether that driver's client honours ctx, and it
 		// catches cancellation arriving between a successful read and the retry too.

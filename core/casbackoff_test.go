@@ -11,8 +11,8 @@ import (
 
 // No AC id: retry pacing is an implementation property, not a behavioral
 // criterion (ai-context/tasks/core-cas-retry-hardening.md). These are white-box
-// so they can reach maxCASRetries/casBackoff/casRunner directly and assert
-// pacing through an injected sleep instead of sleeping for real.
+// so they can reach defaultMaxCASRetries/casBackoff/casRunner directly and
+// assert pacing through an injected sleep instead of sleeping for real.
 
 // withSleep overrides casRunner's backoff delay. Test-only: unlike WithClock,
 // this has no legitimate caller-facing use (backoff pacing isn't part of the
@@ -114,8 +114,8 @@ func TestCASBackoff_ExhaustionMakesExactlyMaxRetriesAttempts(t *testing.T) {
 	if !errors.Is(err, ErrStore) {
 		t.Fatalf("err = %v, want it to also wrap ErrStore", err)
 	}
-	if got := store.attempts(); got != maxCASRetries {
-		t.Fatalf("attempts = %d, want exactly maxCASRetries=%d", got, maxCASRetries)
+	if got := store.attempts(); got != defaultMaxCASRetries {
+		t.Fatalf("attempts = %d, want exactly the default budget %d", got, defaultMaxCASRetries)
 	}
 }
 
