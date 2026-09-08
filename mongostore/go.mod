@@ -1,6 +1,6 @@
 module github.com/asinrus/distributed_go_limiter/mongostore
 
-go 1.26.5
+go 1.23
 
 require (
 	github.com/asinrus/distributed_go_limiter/core v0.0.0

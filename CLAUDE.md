@@ -16,8 +16,9 @@ atomically. So the algorithm lives once, in `core`.
 
 ## Process & context
 Roles, process, and progress live in **`ai-context/`** (start with
-`ai-context/README.md`; `ai-context/PLANS.md` is the architect-owned progress
-tracker). User-facing backend docs are in `docs/client/`. Ratified decisions
+`ai-context/README.md`; `ai-context/tasks/next-roadmap.md` is the current
+architect-owned progress tracker). User-facing backend docs are in
+`docs/client/`. Ratified decisions
 are recorded as ADRs in `docs/adr/`; work items track through
 `ai-context/tasks/` → `ai-context/done/`.
 
@@ -68,6 +69,11 @@ Root is a `go.work` workspace, **not** a module — build/test per module.
   `core.NewCASProxyManager` / `core.NewLockProxyManager`, then run `tck.Run` against it.
 - Time source: local buckets use a monotonic clock; distributed use wall-clock epoch
   (shared across nodes). Both injectable via `WithClock` for tests.
+
+## Go version
+One version, `go 1.23`, for every `go.mod` and `go.work` — development and any
+future consumer alike. No `toolchain` directive, no separate dev pin. See
+`docs/adr/0014-single-go-version.md` for the derivation.
 
 ## Build & test
 `/verify` discovers the workspace modules, runs the suite, and routes failures to the

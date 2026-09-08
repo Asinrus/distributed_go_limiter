@@ -1,6 +1,6 @@
 module github.com/asinrus/distributed_go_limiter/etcdstore
 
-go 1.26.5
+go 1.23
 
 replace github.com/asinrus/distributed_go_limiter/core => ../core
 
