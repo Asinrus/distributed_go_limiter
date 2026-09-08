@@ -13,7 +13,7 @@ import (
 
 // Store failures must be distinguishable from misuse ("wrong API call") and from a
 // plain refusal ("bucket said no"), so a caller can pick its own degradation.
-// No acceptance criterion covers this yet — see the report to the Architect.
+// AC-51 — see ai-context/tasks/q9-errstore-contract-ac.md.
 
 // backendErr is a concrete backend error type, so we can prove the original stays
 // reachable through errors.As after core wraps it.
@@ -88,7 +88,7 @@ func testConfig() core.Config {
 	return core.NewConfig(core.NewBandwidth(10).RefillGreedy(1, time.Second))
 }
 
-func TestStoreErr_GetStateFailureIsStoreError(t *testing.T) {
+func TestAC51_GetStateFailureIsStoreError(t *testing.T) {
 	s := newStubCAS()
 	s.getErr = errDown
 	b, err := core.NewCASProxyManager(s).Bucket("k", testConfig())
@@ -98,7 +98,7 @@ func TestStoreErr_GetStateFailureIsStoreError(t *testing.T) {
 	assert.ErrorIs(t, err, core.ErrStore)
 }
 
-func TestStoreErr_CompareAndSwapFailureIsStoreError(t *testing.T) {
+func TestAC51_CompareAndSwapFailureIsStoreError(t *testing.T) {
 	s := newStubCAS()
 	s.casErr = errDown
 	b, err := core.NewCASProxyManager(s).Bucket("k", testConfig())
@@ -108,7 +108,7 @@ func TestStoreErr_CompareAndSwapFailureIsStoreError(t *testing.T) {
 	assert.ErrorIs(t, err, core.ErrStore)
 }
 
-func TestStoreErr_RemoveFailureIsStoreError(t *testing.T) {
+func TestAC51_RemoveFailureIsStoreError(t *testing.T) {
 	cas := newStubCAS()
 	cas.rmErr = errDown
 	assert.ErrorIs(t, core.NewCASProxyManager(cas).Remove(context.Background(), "k"), core.ErrStore)
@@ -117,7 +117,7 @@ func TestStoreErr_RemoveFailureIsStoreError(t *testing.T) {
 	assert.ErrorIs(t, core.NewLockProxyManager(lock).Remove(context.Background(), "k"), core.ErrStore)
 }
 
-func TestStoreErr_LockStoreDoFailureIsStoreError(t *testing.T) {
+func TestAC51_LockStoreDoFailureIsStoreError(t *testing.T) {
 	b, err := core.NewLockProxyManager(&stubLock{doErr: errDown}).Bucket("k", testConfig())
 	require.NoError(t, err)
 
@@ -128,7 +128,7 @@ func TestStoreErr_LockStoreDoFailureIsStoreError(t *testing.T) {
 // Retries exhausted is a failure of the store layer to complete the operation, so a
 // caller degrading on ErrStore must catch it too — while still being able to tell it
 // apart from an outage.
-func TestStoreErr_CASRetriesExhaustedIsStoreError(t *testing.T) {
+func TestAC51_CASRetriesExhaustedIsStoreError(t *testing.T) {
 	s := newStubCAS()
 	s.neverSwaps = true
 	b, err := core.NewCASProxyManager(s).Bucket("k", testConfig())
@@ -141,7 +141,7 @@ func TestStoreErr_CASRetriesExhaustedIsStoreError(t *testing.T) {
 
 // The trap: a decode failure originates in core's own callback and only travels back
 // through the store's return value. It must NOT be reported as a store failure.
-func TestStoreErr_CorruptStateIsNotStoreError(t *testing.T) {
+func TestAC51_CorruptStateIsNotStoreError(t *testing.T) {
 	ctx := context.Background()
 	garbage := []byte("not a bucket state")
 
@@ -168,7 +168,7 @@ func TestStoreErr_CorruptStateIsNotStoreError(t *testing.T) {
 }
 
 // Misuse and refusal stay clear of ErrStore.
-func TestStoreErr_MisuseAndRefusalAreNotStoreErrors(t *testing.T) {
+func TestAC51_MisuseAndRefusalAreNotStoreErrors(t *testing.T) {
 	ctx := context.Background()
 	b, err := core.NewInMemoryProxyManager().Bucket("k", testConfig())
 	require.NoError(t, err)
@@ -183,7 +183,7 @@ func TestStoreErr_MisuseAndRefusalAreNotStoreErrors(t *testing.T) {
 }
 
 // Wrapping must not hide the backend's own error from the caller.
-func TestStoreErr_OriginalBackendErrorStaysReachable(t *testing.T) {
+func TestAC51_OriginalBackendErrorStaysReachable(t *testing.T) {
 	s := newStubCAS()
 	s.getErr = errDown
 	b, err := core.NewCASProxyManager(s).Bucket("k", testConfig())
