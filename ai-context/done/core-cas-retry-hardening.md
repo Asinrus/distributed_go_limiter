@@ -62,6 +62,11 @@ to the `ErrStore` criterion, now **AC-51** — ratified in
 `ai-context/tasks/q9-errstore-contract-ac.md`; do not assign it a second id
 here. AC-49 to AC-52 are taken by other tasks.
 
+This ruling still stands for the pacing. It does **not** cover the
+caller-configurable budget added after this file was gated — that is a public
+option with an observable contract and it carries **AC-55**, in
+`ai-context/tasks/core-cas-retry-budget-option.md`.
+
 **Done looks like:** concurrent callers on one key no longer retry in lockstep,
 the retry bound is a stated latency budget rather than an arbitrary number, the
 exhaustion error is unchanged, and no test sleeps in wall-clock time to prove

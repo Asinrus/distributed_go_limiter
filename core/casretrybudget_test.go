@@ -7,8 +7,9 @@ import (
 	"time"
 )
 
-// No AC id: see the note in casbackoff_test.go. White-box so the configured
-// budget can be compared against defaultMaxCASRetries, and reusing that file's
+// AC-55 covers the configurable budget, not the pacing itself, which has no id
+// (see the note in casbackoff_test.go). White-box so the configured budget can
+// be compared against defaultMaxCASRetries, and reusing that file's
 // countingLoserStore / sleepSpy fixtures.
 
 // lockNoopStore is a LockStore that never runs its callback: enough to build a
@@ -21,7 +22,7 @@ func (lockNoopStore) Do(context.Context, string, time.Duration, func([]byte, boo
 
 func (lockNoopStore) Remove(context.Context, string) error { return nil }
 
-func TestCASRetryBudget_CustomBudgetReplacesTheDefault(t *testing.T) {
+func TestAC55_CustomBudgetReplacesTheDefault(t *testing.T) {
 	const budget = 3
 	store := &countingLoserStore{}
 	spy := &sleepSpy{}
@@ -45,7 +46,7 @@ func TestCASRetryBudget_CustomBudgetReplacesTheDefault(t *testing.T) {
 	}
 }
 
-func TestCASRetryBudget_BudgetOfOneNeverBacksOff(t *testing.T) {
+func TestAC55_BudgetOfOneNeverBacksOff(t *testing.T) {
 	store := &countingLoserStore{}
 	spy := &sleepSpy{}
 	pm := NewCASProxyManager(store, WithMaxCASRetries(1), withSleep(spy.sleep))
@@ -67,7 +68,7 @@ func TestCASRetryBudget_BudgetOfOneNeverBacksOff(t *testing.T) {
 
 // A non-positive budget is caller misuse, rejected like any other invalid
 // config and never reported as a store failure.
-func TestCASRetryBudget_NonPositiveIsInvalidConfig(t *testing.T) {
+func TestAC55_NonPositiveIsInvalidConfig(t *testing.T) {
 	for _, n := range []int{0, -1} {
 		for name, pm := range map[string]*ProxyManager{
 			"cas":  NewCASProxyManager(&countingLoserStore{}, WithMaxCASRetries(n)),
