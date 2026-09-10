@@ -16,11 +16,13 @@ bucket. While it waits, another goroutine's `AvailableTokens(ctx)` returns
   how `BlockingBucket.Consume` holds a waiter's place in line, and it is the
   only way `currentSize` drops below zero: `tryConsume` guards with
   `if n <= s.currentSize` (`core/ops.go:20`).
-- Both implementations route through the same read — `core/local.go:79` and
-  `core/proxymanager.go:139` — so one clamp covers local and every backend.
+- Both implementations route through the same read —
+  `LocalBucket.AvailableTokens` (`core/local.go:77`) and
+  `proxyBucket.AvailableTokens` (`core/proxymanager.go:161`) — so one clamp
+  covers local and every backend.
 - Distributed is not merely reachable, it is **persisted**: `reserve` reports
   `modified=true`, so `proxyBucket.reserveTokens`
-  (`core/proxymanager.go:151-159`) writes the negative state through the
+  (`core/proxymanager.go:174`) writes the negative state through the
   executor, `core/codec.go:21` encodes it and `core/codec.go:35` decodes it
   with no validation. Every node that reads that key afterwards sees the
   negative until refills repay it. That is why the fix belongs at the read

@@ -33,7 +33,8 @@ exercises a cancelled context against a real backend today (checked: no
 `core/storetest`), which is the actual gap.
 
 **Why AC-50 does not already cover it.** AC-50's guard sits in the executor
-(`core/command.go:44,84`), *above* the store. Drive a cancelled context through
+(the `ctx.Err()` guards at `core/command.go:111` in `casRunner.execute` and
+`core/command.go:163` in `lockRunner.execute`), *above* the store. Drive a cancelled context through
 `Bucket.TryConsume` on any backend and the guard answers first — every backend
 passes, including one whose store ignores its context entirely. A test written
 at the `Bucket` level proves the executor and says nothing about the vendor. The
@@ -61,9 +62,9 @@ non-nil error and must not perform its write.
 
 **Reaching the store: use `export_test.go`, do not widen the public API.**
 `pgstore/pgstore.go:247` and `mongostore/mongostore.go:132` export `NewStore`;
-`redisstore/redisstore.go:37` and `etcdstore/etcdstore.go:16` keep `store`
+`redisstore/redisstore.go:37` and `etcdstore/etcdstore.go:17` keep `store`
 unexported and offer only `NewProxyManager`
-(`redisstore/redisstore.go:110`, `etcdstore/etcdstore.go:107`), and all four
+(`redisstore/redisstore.go:110`, `etcdstore/etcdstore.go:190`), and all four
 test files are external (`package redisstore_test`). An internal
 `export_test.go` in each of the two closed packages reaches the store without
 adding public surface. Whether that asymmetry should be closed for *users* is a
