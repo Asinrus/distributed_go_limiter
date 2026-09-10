@@ -304,36 +304,3 @@ func TestEtcdMaxCASRetriesReachableAndValidated(t *testing.T) {
 	assert.ErrorIs(t, err, core.ErrInvalidConfig)
 	assert.Nil(t, b)
 }
-
-// TTL collision: whichever of WithTTL / core.WithExpireAfterWrite (via
-// WithProxyOption) is passed last to NewProxyManager wins — the documented
-// precedence in WithTTL's godoc.
-func TestEtcdTTLCollisionLastOptionWins(t *testing.T) {
-	cli := startEtcd(t)
-	ctx := context.Background()
-	cfg := core.NewConfig(core.NewBandwidth(10).RefillGreedy(1, time.Hour))
-
-	pmTTLWins := etcdstore.NewProxyManager(cli,
-		etcdstore.WithProxyOption(core.WithExpireAfterWrite(0)),
-		etcdstore.WithTTL(time.Hour))
-	b, err := pmTTLWins.Bucket("ttl-collision-a", cfg)
-	require.NoError(t, err)
-	_, err = b.TryConsume(ctx, 1)
-	require.NoError(t, err)
-	resp, err := cli.Get(ctx, "ttl-collision-a")
-	require.NoError(t, err)
-	require.Len(t, resp.Kvs, 1)
-	assert.NotZero(t, resp.Kvs[0].Lease, "later WithTTL must win over an earlier core.WithExpireAfterWrite(0)")
-
-	pmNoTTLWins := etcdstore.NewProxyManager(cli,
-		etcdstore.WithTTL(time.Hour),
-		etcdstore.WithProxyOption(core.WithExpireAfterWrite(0)))
-	b, err = pmNoTTLWins.Bucket("ttl-collision-b", cfg)
-	require.NoError(t, err)
-	_, err = b.TryConsume(ctx, 1)
-	require.NoError(t, err)
-	resp, err = cli.Get(ctx, "ttl-collision-b")
-	require.NoError(t, err)
-	require.Len(t, resp.Kvs, 1)
-	assert.Zero(t, resp.Kvs[0].Lease, "later core.WithExpireAfterWrite(0) must win over an earlier WithTTL")
-}

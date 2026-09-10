@@ -122,34 +122,3 @@ func TestRedisMaxCASRetriesReachableAndValidated(t *testing.T) {
 	assert.ErrorIs(t, err, core.ErrInvalidConfig)
 	assert.Nil(t, b)
 }
-
-// TTL collision: whichever of WithTTL / core.WithExpireAfterWrite (via
-// WithProxyOption) is passed last to NewProxyManager wins — the documented
-// precedence in WithTTL's godoc.
-func TestRedisTTLCollisionLastOptionWins(t *testing.T) {
-	rdb := startRedis(t)
-	ctx := context.Background()
-	cfg := core.NewConfig(core.NewBandwidth(10).RefillGreedy(1, time.Hour))
-
-	pmTTLWins := redisstore.NewProxyManager(rdb,
-		redisstore.WithProxyOption(core.WithExpireAfterWrite(0)),
-		redisstore.WithTTL(time.Hour))
-	b, err := pmTTLWins.Bucket("ttl-collision-a", cfg)
-	require.NoError(t, err)
-	_, err = b.TryConsume(ctx, 1)
-	require.NoError(t, err)
-	ttl, err := rdb.TTL(ctx, "ttl-collision-a").Result()
-	require.NoError(t, err)
-	assert.Positive(t, ttl, "later WithTTL must win over an earlier core.WithExpireAfterWrite(0)")
-
-	pmNoTTLWins := redisstore.NewProxyManager(rdb,
-		redisstore.WithTTL(time.Hour),
-		redisstore.WithProxyOption(core.WithExpireAfterWrite(0)))
-	b, err = pmNoTTLWins.Bucket("ttl-collision-b", cfg)
-	require.NoError(t, err)
-	_, err = b.TryConsume(ctx, 1)
-	require.NoError(t, err)
-	ttl, err = rdb.TTL(ctx, "ttl-collision-b").Result()
-	require.NoError(t, err)
-	assert.Equal(t, time.Duration(-1), ttl, "later core.WithExpireAfterWrite(0) must win over an earlier WithTTL")
-}

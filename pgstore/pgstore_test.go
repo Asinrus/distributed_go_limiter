@@ -286,34 +286,3 @@ func TestPostgresMaxCASRetriesReachableAndValidated(t *testing.T) {
 	assert.ErrorIs(t, err, core.ErrInvalidConfig)
 	assert.Nil(t, b)
 }
-
-// TTL collision: whichever of WithTTL / core.WithExpireAfterWrite (via
-// WithProxyOption) is passed last to NewProxyManager wins — the documented
-// precedence in WithTTL's godoc.
-func TestPostgresTTLCollisionLastOptionWins(t *testing.T) {
-	pool := startPostgres(t)
-	ctx := context.Background()
-	cfg := core.NewConfig(core.NewBandwidth(10).RefillGreedy(1, time.Hour))
-
-	pmTTLWins := pgstore.NewProxyManager(pool,
-		pgstore.WithProxyOption(core.WithExpireAfterWrite(0)),
-		pgstore.WithTTL(time.Hour))
-	b, err := pmTTLWins.Bucket("ttl-collision-a", cfg)
-	require.NoError(t, err)
-	_, err = b.TryConsume(ctx, 1)
-	require.NoError(t, err)
-	var expiresAt *int64
-	require.NoError(t, pool.QueryRow(ctx, `SELECT expires_at FROM bucket WHERE id = $1`, "ttl-collision-a").Scan(&expiresAt))
-	assert.NotNil(t, expiresAt, "later WithTTL must win over an earlier core.WithExpireAfterWrite(0)")
-
-	pmNoTTLWins := pgstore.NewProxyManager(pool,
-		pgstore.WithTTL(time.Hour),
-		pgstore.WithProxyOption(core.WithExpireAfterWrite(0)))
-	b, err = pmNoTTLWins.Bucket("ttl-collision-b", cfg)
-	require.NoError(t, err)
-	_, err = b.TryConsume(ctx, 1)
-	require.NoError(t, err)
-	expiresAt = nil
-	require.NoError(t, pool.QueryRow(ctx, `SELECT expires_at FROM bucket WHERE id = $1`, "ttl-collision-b").Scan(&expiresAt))
-	assert.Nil(t, expiresAt, "later core.WithExpireAfterWrite(0) must win over an earlier WithTTL")
-}

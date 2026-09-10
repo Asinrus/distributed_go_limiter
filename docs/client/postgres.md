@@ -16,8 +16,8 @@ same one `core.NewInMemoryProxyManager()` gives you with no container at all.
 | `WithTable(t)` | `bucket` | Table name. |
 | `WithIDColumn(c)` | `id` | Primary-key column (`TEXT`). |
 | `WithStateColumn(c)` | `state` | State column (`BYTEA`). |
-| `WithTTL(d)` | `0` (no expiry) | Marks state stale after this long. See cleanup below. |
-| `WithProxyOption(o)` | — | Forwards a `core.ProxyOption` (`core.WithClock`, `core.WithMaxCASRetries`, `core.WithExpireAfterWrite`, …) to the underlying `core.ProxyManager`. If both `WithTTL` and `core.WithExpireAfterWrite` are given, whichever is passed last to `NewProxyManager` wins. |
+| `WithTTL(d)` | `0` (no expiry) | Marks state stale after this long. Sugar for `WithProxyOption(core.WithExpireAfterWrite(d))`. See cleanup below. |
+| `WithProxyOption(o)` | — | Forwards a `core.ProxyOption` (`core.WithClock`, `core.WithMaxCASRetries`, `core.WithExpireAfterWrite`, …) to the underlying `core.ProxyManager`. |
 
 Identifiers cannot be bind parameters, so these names are interpolated into SQL — quoted and
 escaped, never executed. That makes them case-sensitive and exact: `WithTable("Bucket")`

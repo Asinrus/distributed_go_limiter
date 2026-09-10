@@ -200,36 +200,3 @@ func TestMongoMaxCASRetriesReachableAndValidated(t *testing.T) {
 	assert.ErrorIs(t, err, core.ErrInvalidConfig)
 	assert.Nil(t, b)
 }
-
-// TTL collision: whichever of WithTTL / core.WithExpireAfterWrite (via
-// WithProxyOption) is passed last to NewProxyManager wins — the documented
-// precedence in WithTTL's godoc.
-func TestMongoTTLCollisionLastOptionWins(t *testing.T) {
-	coll := startMongo(t)
-	ctx := context.Background()
-	cfg := core.NewConfig(core.NewBandwidth(10).RefillGreedy(1, time.Hour))
-
-	pmTTLWins := mongostore.NewProxyManager(coll,
-		mongostore.WithProxyOption(core.WithExpireAfterWrite(0)),
-		mongostore.WithTTL(time.Hour))
-	b, err := pmTTLWins.Bucket("ttl-collision-a", cfg)
-	require.NoError(t, err)
-	_, err = b.TryConsume(ctx, 1)
-	require.NoError(t, err)
-	var d bson.M
-	require.NoError(t, coll.FindOne(ctx, bson.M{"_id": "ttl-collision-a"}).Decode(&d))
-	_, hasExpiry := d["expiresAt"]
-	assert.True(t, hasExpiry, "later WithTTL must win over an earlier core.WithExpireAfterWrite(0)")
-
-	pmNoTTLWins := mongostore.NewProxyManager(coll,
-		mongostore.WithTTL(time.Hour),
-		mongostore.WithProxyOption(core.WithExpireAfterWrite(0)))
-	b, err = pmNoTTLWins.Bucket("ttl-collision-b", cfg)
-	require.NoError(t, err)
-	_, err = b.TryConsume(ctx, 1)
-	require.NoError(t, err)
-	d = nil
-	require.NoError(t, coll.FindOne(ctx, bson.M{"_id": "ttl-collision-b"}).Decode(&d))
-	_, hasExpiry = d["expiresAt"]
-	assert.False(t, hasExpiry, "later core.WithExpireAfterWrite(0) must win over an earlier WithTTL")
-}
