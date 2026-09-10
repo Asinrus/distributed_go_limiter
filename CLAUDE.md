@@ -22,7 +22,18 @@ architect-owned progress tracker). User-facing backend docs are in
 are recorded as ADRs in `docs/adr/`; work items track through
 `ai-context/tasks/` → `ai-context/done/`.
 
-## Layout (go.work workspace, 4 modules)
+## Vocabulary
+Three words, used precisely; they are not interchangeable.
+
+- **vendor** — the external system (Redis, Postgres, MongoDB, etcd).
+- **store** — our adapter implementing `core.CASStore` / `core.LockStore`.
+- **backend** — the Go module shipping one (`redisstore/`).
+
+"Provider" is retired except inside the ratified **provider-swap** / AC-46
+phrase, which is frozen wording. (`vendor/` is a reserved Go directory name;
+harmless, since the word is used in prose and identifiers only.)
+
+## Layout (go.work workspace, 6 modules)
 Root is a `go.work` workspace, **not** a module — build/test per module.
 
 - `core/` — API + algorithm, **zero external runtime deps**. `core` is also
@@ -48,6 +59,9 @@ Root is a `go.work` workspace, **not** a module — build/test per module.
 - `pgstore/` (package `pgstore`) — `LockStore` via `SELECT … FOR UPDATE`.
   `SchemaSQL` exposes the DDL for users who run their own migrations; `EnsureSchema`
   applies it directly.
+- `mongostore/` (package `mongostore`) — `CASStore` via a conditional `ReplaceOne`.
+- `etcdstore/` (package `etcdstore`) — `CASStore` via `Txn` comparing on
+  `clientv3.Value`; expiry rides an etcd lease.
 - `examples/` — two `main` packages (`examples/redis/`, `examples/postgres/`), each
   with a `docker-compose.yml`. **The `net/http` lives here, in the demo programs —
   not in `core`.** Only backend-specific line is the `*core.ProxyManager` constructor;
