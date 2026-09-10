@@ -38,7 +38,7 @@ func storeErr(ctx context.Context, err error) error {
 // default — plus n GetState/CompareAndSwap round trips. WithMaxCASRetries trades
 // the two off.
 //
-// Measured against core/tck's AC-42 (8 workers x 250 ops on one hot key) on
+// Measured against core/storetest's AC-42 (8 workers x 250 ops on one hot key) on
 // every real CASStore backend, not just MemStore, where a lost race costs a
 // network round trip rather than nanoseconds: 16 failed against mongostore
 // with retries exhausted, and 32 flaked the same way on a repeat run. 64 held

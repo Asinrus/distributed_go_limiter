@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/asinrus/distributed_go_limiter/core"
-	"github.com/asinrus/distributed_go_limiter/core/tck"
+	"github.com/asinrus/distributed_go_limiter/core/storetest"
 	"github.com/asinrus/distributed_go_limiter/mongostore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,7 +21,7 @@ import (
 
 // mongoColl is shared by every test in this file: one container for the
 // whole package rather than one per test. Tests stay isolated by using
-// distinct document keys (core/tck generates its own; the rest use fixed,
+// distinct document keys (core/storetest generates its own; the rest use fixed,
 // non-overlapping names), so a shared collection never leaks state between
 // tests.
 var mongoColl *mongo.Collection
@@ -83,7 +83,7 @@ func startMongo(t *testing.T) *mongo.Collection {
 // backends run.
 func TestMongoConformance(t *testing.T) {
 	coll := startMongo(t)
-	tck.Run(t, func() *core.ProxyManager {
+	storetest.Run(t, func() *core.ProxyManager {
 		return mongostore.NewProxyManager(coll)
 	})
 }

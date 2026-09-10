@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/asinrus/distributed_go_limiter/core"
-	"github.com/asinrus/distributed_go_limiter/core/tck"
+	"github.com/asinrus/distributed_go_limiter/core/storetest"
 	"github.com/asinrus/distributed_go_limiter/pgstore"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
@@ -47,7 +47,7 @@ func startPostgres(t *testing.T) *pgxpool.Pool {
 // AC-41..44 on real Postgres — the same suite the in-memory and Redis backends run.
 func TestPostgresConformance(t *testing.T) {
 	pool := startPostgres(t)
-	tck.Run(t, func() *core.ProxyManager {
+	storetest.Run(t, func() *core.ProxyManager {
 		return pgstore.NewProxyManager(pool)
 	})
 }
