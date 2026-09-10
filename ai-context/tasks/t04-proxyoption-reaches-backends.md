@@ -64,7 +64,7 @@ and is now the lease-count test). It does not, and neither half of it does:
 
 **What forwarding `WithClock` actually buys** is the reason this ticket blocks
 T05: every conformance case today has to use `slowConfig`
-(`core/tck/tck.go:27`, 1 token/hour) precisely so that refill *never* happens
+(`core/storetest`'s `slowConfig`, 1 token/hour) precisely so that refill *never* happens
 during a test. Nothing involving elapsed time — a refill wait, a probe's
 `NanosToWaitForRefill`, a blocking `Consume` — can be asserted against a real
 backend without either an injectable clock or a real sleep. T05 needs the
