@@ -19,3 +19,11 @@ with the Architect, not implementing directly.
 **Note:** Memcached was considered alongside this and dropped from scope —
 see `git log -p -- ai-context/PLANS.md` (`_restructure_` changelog entry;
 the file itself is retired, `docs/adr/0016-retire-plans-md.md`).
+
+---
+
+**Final status (owner ruling): not needed now; may be implemented later.** No
+Hazelcast backend is being built. The decision is reversible — nothing is
+deleted, no interface changes, and this file is the scoping if it is ever
+picked up — so it gets no ADR (`docs/adr/0007-tasks-done-workflow.md`). Filed
+under `done/` because the question is answered, not because code shipped.
