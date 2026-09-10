@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,6 +19,20 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+// fakeClock is a controllable clock for driving refills without a wall-clock
+// sleep. core has its own (core/local_test.go) but it is unexported and this
+// package sits across a module boundary, so it is re-declared here.
+type fakeClock struct{ ns atomic.Int64 }
+
+func newFakeClock() *fakeClock {
+	c := &fakeClock{}
+	c.ns.Store(time.Now().UnixNano())
+	return c
+}
+
+func (c *fakeClock) now() int64              { return c.ns.Load() }
+func (c *fakeClock) advance(d time.Duration) { c.ns.Add(int64(d)) }
 
 // mongoColl is shared by every test in this file: one container for the
 // whole package rather than one per test. Tests stay isolated by using
@@ -143,4 +158,78 @@ func TestMongoCreateOverwritesUnreapedExpiredDoc(t *testing.T) {
 	av, err := b.AvailableTokens(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, int64(7), av)
+}
+
+// core.WithClock reaches the MongoDB constructor via WithProxyOption, so a
+// refill can be driven against a real container with no wall-clock sleep —
+// the capability T05 is built on.
+func TestMongoWithClockDrivesRefillWithNoSleep(t *testing.T) {
+	coll := startMongo(t)
+	ctx := context.Background()
+	clk := newFakeClock()
+	pm := mongostore.NewProxyManager(coll, mongostore.WithProxyOption(core.WithClock(clk.now)))
+	cfg := core.NewConfig(core.NewBandwidth(10).RefillGreedy(10, time.Second))
+
+	b, err := pm.Bucket("clock-refill", cfg)
+	require.NoError(t, err)
+
+	ok, err := b.TryConsume(ctx, 10)
+	require.NoError(t, err)
+	require.True(t, ok, "drain the bucket")
+
+	av, err := b.AvailableTokens(ctx)
+	require.NoError(t, err)
+	require.Equal(t, int64(0), av)
+
+	clk.advance(time.Second)
+
+	av, err = b.AvailableTokens(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(10), av, "refilled per the injected clock, no wall-clock sleep")
+}
+
+// core.WithMaxCASRetries reaches the MongoDB constructor, and an
+// out-of-range value is rejected exactly as on the in-memory manager (AC-55)
+// — proof the plumbing is generic, not special-cased for the clock.
+func TestMongoMaxCASRetriesReachableAndValidated(t *testing.T) {
+	coll := startMongo(t)
+	pm := mongostore.NewProxyManager(coll, mongostore.WithProxyOption(core.WithMaxCASRetries(0)))
+	cfg := core.NewConfig(core.NewBandwidth(10).RefillGreedy(1, time.Hour))
+
+	b, err := pm.Bucket("max-retries", cfg)
+	assert.ErrorIs(t, err, core.ErrInvalidConfig)
+	assert.Nil(t, b)
+}
+
+// TTL collision: whichever of WithTTL / core.WithExpireAfterWrite (via
+// WithProxyOption) is passed last to NewProxyManager wins — the documented
+// precedence in WithTTL's godoc.
+func TestMongoTTLCollisionLastOptionWins(t *testing.T) {
+	coll := startMongo(t)
+	ctx := context.Background()
+	cfg := core.NewConfig(core.NewBandwidth(10).RefillGreedy(1, time.Hour))
+
+	pmTTLWins := mongostore.NewProxyManager(coll,
+		mongostore.WithProxyOption(core.WithExpireAfterWrite(0)),
+		mongostore.WithTTL(time.Hour))
+	b, err := pmTTLWins.Bucket("ttl-collision-a", cfg)
+	require.NoError(t, err)
+	_, err = b.TryConsume(ctx, 1)
+	require.NoError(t, err)
+	var d bson.M
+	require.NoError(t, coll.FindOne(ctx, bson.M{"_id": "ttl-collision-a"}).Decode(&d))
+	_, hasExpiry := d["expiresAt"]
+	assert.True(t, hasExpiry, "later WithTTL must win over an earlier core.WithExpireAfterWrite(0)")
+
+	pmNoTTLWins := mongostore.NewProxyManager(coll,
+		mongostore.WithTTL(time.Hour),
+		mongostore.WithProxyOption(core.WithExpireAfterWrite(0)))
+	b, err = pmNoTTLWins.Bucket("ttl-collision-b", cfg)
+	require.NoError(t, err)
+	_, err = b.TryConsume(ctx, 1)
+	require.NoError(t, err)
+	d = nil
+	require.NoError(t, coll.FindOne(ctx, bson.M{"_id": "ttl-collision-b"}).Decode(&d))
+	_, hasExpiry = d["expiresAt"]
+	assert.False(t, hasExpiry, "later core.WithExpireAfterWrite(0) must win over an earlier WithTTL")
 }
