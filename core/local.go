@@ -92,3 +92,10 @@ func (b *LocalBucket) reserveTokens(_ context.Context, n, maxWaitNanos int64) (i
 	wait, ok, _ := b.state.reserve(b.now(), n, maxWaitNanos)
 	return wait, ok, nil
 }
+
+func (b *LocalBucket) releaseTokens(_ context.Context, n int64) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.state.release(b.now(), n)
+	return nil
+}
