@@ -173,8 +173,8 @@ func (s *store) Remove(ctx context.Context, key string) error {
 type Option func(*config)
 
 type config struct {
-	prefix string
-	ttl    time.Duration
+	prefix   string
+	coreOpts []core.ProxyOption
 }
 
 // WithKeyPrefix namespaces bucket keys in etcd (e.g. "dgl:").
@@ -183,7 +183,23 @@ func WithKeyPrefix(p string) Option { return func(c *config) { c.prefix = p } }
 // WithTTL sets an expire-after-write TTL on bucket state (0 = no expiry). etcd
 // leases are granted in whole seconds with a minimum of 1s, so a TTL under 1s
 // (e.g. 200ms) is rounded up to 1s.
-func WithTTL(d time.Duration) Option { return func(c *config) { c.ttl = d } }
+//
+// It is sugar for WithProxyOption(core.WithExpireAfterWrite(d)) — the TTL must
+// reach the store as well as core.ProxyManager's bookkeeping, so this is where
+// both happen. If both WithTTL and an explicit core.WithExpireAfterWrite
+// (passed via WithProxyOption) are given to NewProxyManager, whichever is
+// passed last wins, same as any functional option.
+func WithTTL(d time.Duration) Option {
+	return func(c *config) { c.coreOpts = append(c.coreOpts, core.WithExpireAfterWrite(d)) }
+}
+
+// WithProxyOption forwards a core.ProxyOption — core.WithClock,
+// core.WithMaxCASRetries, core.WithExpireAfterWrite, or any future one — to the
+// underlying core.ProxyManager, so nothing core exposes is unreachable from this
+// constructor. See WithTTL's doc for the case where both set a TTL.
+func WithProxyOption(o core.ProxyOption) Option {
+	return func(c *config) { c.coreOpts = append(c.coreOpts, o) }
+}
 
 // NewProxyManager builds a distributed ProxyManager backed by etcd. cli's
 // lifetime is owned by the caller, as with redis.Cmdable and *pgxpool.Pool.
@@ -193,5 +209,5 @@ func NewProxyManager(cli *clientv3.Client, opts ...Option) *core.ProxyManager {
 		o(&c)
 	}
 	s := &store{cli: cli, prefix: c.prefix, leases: make(map[string]clientv3.LeaseID)}
-	return core.NewCASProxyManager(s, core.WithExpireAfterWrite(c.ttl))
+	return core.NewCASProxyManager(s, c.coreOpts...)
 }

@@ -19,7 +19,7 @@ type config struct {
 	table    string
 	idCol    string
 	stateCol string
-	ttl      time.Duration
+	coreOpts []core.ProxyOption
 }
 
 func defaultConfig() config {
@@ -40,8 +40,23 @@ func WithIDColumn(col string) Option { return func(c *config) { c.idCol = col } 
 // WithStateColumn sets the state (BYTEA) column name (default "state").
 func WithStateColumn(col string) Option { return func(c *config) { c.stateCol = col } }
 
-// WithTTL sets an expire-after-write TTL (0 = no expiry).
-func WithTTL(d time.Duration) Option { return func(c *config) { c.ttl = d } }
+// WithTTL sets an expire-after-write TTL (0 = no expiry). It is sugar for
+// WithProxyOption(core.WithExpireAfterWrite(d)) — the TTL must reach the store
+// as well as core.ProxyManager's bookkeeping, so this is where both happen. If
+// both WithTTL and an explicit core.WithExpireAfterWrite (passed via
+// WithProxyOption) are given to NewProxyManager, whichever is passed last wins,
+// same as any functional option.
+func WithTTL(d time.Duration) Option {
+	return func(c *config) { c.coreOpts = append(c.coreOpts, core.WithExpireAfterWrite(d)) }
+}
+
+// WithProxyOption forwards a core.ProxyOption — core.WithClock,
+// core.WithMaxCASRetries, core.WithExpireAfterWrite, or any future one — to the
+// underlying core.ProxyManager, so nothing core exposes is unreachable from this
+// constructor. See WithTTL's doc for the case where both set a TTL.
+func WithProxyOption(o core.ProxyOption) Option {
+	return func(c *config) { c.coreOpts = append(c.coreOpts, o) }
+}
 
 func newConfig(opts ...Option) config {
 	c := defaultConfig()
@@ -254,5 +269,5 @@ func NewStore(pool *pgxpool.Pool, opts ...Option) *Store {
 func NewProxyManager(pool *pgxpool.Pool, opts ...Option) *core.ProxyManager {
 	c := newConfig(opts...)
 	store := newStore(pool, c)
-	return core.NewLockProxyManager(store, core.WithExpireAfterWrite(c.ttl))
+	return core.NewLockProxyManager(store, c.coreOpts...)
 }
