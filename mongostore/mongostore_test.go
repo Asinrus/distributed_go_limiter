@@ -98,8 +98,8 @@ func startMongo(t *testing.T) *mongo.Collection {
 // backends run.
 func TestMongoConformance(t *testing.T) {
 	coll := startMongo(t)
-	storetest.Run(t, func() *core.ProxyManager {
-		return mongostore.NewProxyManager(coll)
+	storetest.Run(t, func(now func() int64) *core.ProxyManager {
+		return mongostore.NewProxyManager(coll, mongostore.WithProxyOption(core.WithClock(now)))
 	})
 }
 

@@ -114,8 +114,8 @@ func startEtcd(t *testing.T) *clientv3.Client {
 // backends run.
 func TestEtcdConformance(t *testing.T) {
 	cli := startEtcd(t)
-	storetest.Run(t, func() *core.ProxyManager {
-		return etcdstore.NewProxyManager(cli)
+	storetest.Run(t, func(now func() int64) *core.ProxyManager {
+		return etcdstore.NewProxyManager(cli, etcdstore.WithProxyOption(core.WithClock(now)))
 	})
 }
 

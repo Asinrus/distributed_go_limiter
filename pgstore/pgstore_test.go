@@ -62,8 +62,8 @@ func startPostgres(t *testing.T) *pgxpool.Pool {
 // AC-41..44 on real Postgres — the same suite the in-memory and Redis backends run.
 func TestPostgresConformance(t *testing.T) {
 	pool := startPostgres(t)
-	storetest.Run(t, func() *core.ProxyManager {
-		return pgstore.NewProxyManager(pool)
+	storetest.Run(t, func(now func() int64) *core.ProxyManager {
+		return pgstore.NewProxyManager(pool, pgstore.WithProxyOption(core.WithClock(now)))
 	})
 }
 
