@@ -77,7 +77,7 @@ addition was checked against its own source first:
 |---|---|
 | ADR index gains `cancellation is not a store failure (0015…)` | `docs/adr/0015-cancellation-is-not-a-store-failure.md` — and the `docs/adr/` listing, which *is* the index |
 | `_ac50-error-shape_`, `_ctx-rulings_` | ADR 0015 (the ruling, `storeErr` as the choke point, the `database/sql` precedent, the migration note) and `ai-context/tasks/core-ctx-cancellation.md:34,67,95` (the rows 5/6 split, the `MemStore` hygiene demotion) |
-| `_ac52-vendor-ctx_`, `_ac52-deferred_` | `ai-context/tasks/tck-vendor-ctx-conformance.md:3,13,61,80` (the deferral, the tier drop, the driver audit against pinned versions, the `export_test.go` and row-7-sibling rulings) |
+| `_ac52-vendor-ctx_`, `_ac52-deferred_` | `ai-context/tasks/vendor-ctx-conformance.md` — the deferral, the tier drop, the driver audit against pinned versions, the `export_test.go` and row-7-sibling rulings. Renamed from `tck-vendor-ctx-conformance.md` and since edited, so the line numbers this row originally cited (`:3,13,61,80`) no longer hold |
 | `_ac54-reservation-refund_` | `ai-context/tasks/core-blocking-reservation-refund.md:34,39,57,69` (the `WithoutCancel` write, the capacity clamp, the `ErrReservationNotReleased` shape, the known ceiling) |
 
 Every entry is a shorter paraphrase of a file added in the same commit. The
