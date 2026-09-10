@@ -94,15 +94,31 @@ func (s *store) Remove(ctx context.Context, key string) error {
 type Option func(*config)
 
 type config struct {
-	prefix string
-	ttl    time.Duration
+	prefix   string
+	coreOpts []core.ProxyOption
 }
 
 // WithKeyPrefix namespaces bucket keys in Redis (e.g. "dgl:").
 func WithKeyPrefix(p string) Option { return func(c *config) { c.prefix = p } }
 
-// WithTTL sets an expire-after-write TTL on bucket state (0 = no expiry).
-func WithTTL(d time.Duration) Option { return func(c *config) { c.ttl = d } }
+// WithTTL sets an expire-after-write TTL on bucket state (0 = no expiry). It is
+// sugar for WithProxyOption(core.WithExpireAfterWrite(d)) — the TTL must reach
+// the store as well as core.ProxyManager's bookkeeping, so this is where both
+// happen. If both WithTTL and an explicit core.WithExpireAfterWrite (passed via
+// WithProxyOption) are given to NewProxyManager, whichever is passed last wins,
+// same as any functional option — order in the call, not which helper it came
+// through, decides.
+func WithTTL(d time.Duration) Option {
+	return func(c *config) { c.coreOpts = append(c.coreOpts, core.WithExpireAfterWrite(d)) }
+}
+
+// WithProxyOption forwards a core.ProxyOption — core.WithClock,
+// core.WithMaxCASRetries, core.WithExpireAfterWrite, or any future one — to the
+// underlying core.ProxyManager, so nothing core exposes is unreachable from this
+// constructor. See WithTTL's doc for the case where both set a TTL.
+func WithProxyOption(o core.ProxyOption) Option {
+	return func(c *config) { c.coreOpts = append(c.coreOpts, o) }
+}
 
 // NewProxyManager builds a distributed ProxyManager backed by Redis. rdb may be a
 // *redis.Client or *redis.ClusterClient. Calling code uses the returned
@@ -113,5 +129,5 @@ func NewProxyManager(rdb redis.Cmdable, opts ...Option) *core.ProxyManager {
 		o(&c)
 	}
 	s := &store{rdb: rdb, prefix: c.prefix}
-	return core.NewCASProxyManager(s, core.WithExpireAfterWrite(c.ttl))
+	return core.NewCASProxyManager(s, c.coreOpts...)
 }

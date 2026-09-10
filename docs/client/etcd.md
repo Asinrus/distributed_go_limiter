@@ -15,6 +15,7 @@ That is the entire etcd-specific surface. Everything after it — `pm.Bucket(key
 |---|---|---|
 | `WithKeyPrefix(p)` | `""` | Namespaces bucket keys (e.g. `"dgl:"`). |
 | `WithTTL(d)` | `0` (no expiry) | Expire-after-write, via a per-write lease. |
+| `WithProxyOption(o)` | — | Forwards a `core.ProxyOption` (`core.WithClock`, `core.WithMaxCASRetries`, `core.WithExpireAfterWrite`, …) to the underlying `core.ProxyManager`. If both `WithTTL` and `core.WithExpireAfterWrite` are given, whichever is passed last to `NewProxyManager` wins. |
 
 ## `WithTTL` is the whole cleanup story
 
