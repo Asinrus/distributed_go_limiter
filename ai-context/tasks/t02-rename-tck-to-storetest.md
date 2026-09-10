@@ -72,9 +72,14 @@ suite still runs everywhere it ran before, under its new name:
   still run and pass against their real container, with the subtest names
   unchanged (`AC41_KeyIsolation` and siblings) — a rename that silently drops a
   backend's suite invocation would otherwise look like a green run.
-- `grep -rn 'core/tck\|package tck\|tck\.' .` returns nothing outside
-  `docs/adr/0006-*.md` and git history.
+- `grep -rn '\btck\b' .` returns nothing outside four deliberate places: the
+  `docs/adr/0006-…-tck.md` filename, `ai-context/done/` (archived task files
+  record what was true when the work shipped), this ticket and T01's ruling 7
+  (both describe the rename, so the old name is the correct before-state), and
+  `core/storetest/storetest.go`'s `tck-` test-key prefix. Anything else is a
+  miss — `.claude/agents/dev.md` and `.claude/commands/verify.md` were exactly
+  that, found only after this claim was first written.
 
-**Done looks like:** `go test ./...` is green in all six modules, no file or
-identifier named `tck` remains outside the ADR filename, and the package doc
-says why a non-test package imports `testing`.
+**Done looks like:** `go test ./...` is green in all six modules, no reference
+to `tck` survives outside the four places listed above, and the package doc says
+why a non-test package imports `testing`.

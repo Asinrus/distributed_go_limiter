@@ -1,9 +1,9 @@
 # Regression guard: every vendor backend honours a cancelled context
 
-**Status: deferred, tier 2.** Blocked on the owner's ruling on whether etcd
-stays a main backend — scoped as its own question on a separate branch. How
-many backends this project carries decides how much conformance surface is
-worth building.
+**Status: un-deferred, tier 2.** It was blocked on whether etcd stays a main
+backend; that is answered — etcd stays, as a peer, and there are no backend
+tiers at all (`ai-context/done/etcd-as-a-main-backend.md`). So this covers four
+backends, and the count is settled rather than pending.
 
 **The premise this task was first written on is false — corrected.** It was
 scoped as a bug hunt, expecting at least one backend to drop the property. A
@@ -30,10 +30,11 @@ having — cheap pluggability is the product (roadmap owner ruling 3) — but it
 tier 2 work, not the tier 1 bug hunt it was filed as. Nothing in the repo
 exercises a cancelled context against a real backend today (checked: no
 `context.WithCancel`/`WithTimeout`/`WithDeadline` in any backend test or in
-`core/tck`), which is the actual gap.
+`core/storetest`), which is the actual gap.
 
 **Why AC-50 does not already cover it.** AC-50's guard sits in the executor
-(`core/command.go:44,84`), *above* the store. Drive a cancelled context through
+(the `ctx.Err()` guards at `core/command.go:111` in `casRunner.execute` and
+`core/command.go:163` in `lockRunner.execute`), *above* the store. Drive a cancelled context through
 `Bucket.TryConsume` on any backend and the guard answers first — every backend
 passes, including one whose store ignores its context entirely. A test written
 at the `Bucket` level proves the executor and says nothing about the vendor. The
@@ -45,13 +46,14 @@ part of the contract at `core/store.go:15,20,22` (CAS) and `core/store.go:40,43`
 non-nil error and must not perform its write.
 
 **In scope**
-- A store-level entry point in `core/tck` beside the existing bucket-level one
-  (`core/tck/tck.go:33`) — `tck.RunCASStore` / `tck.RunLockStore`, taking a
+- A store-level entry point in `core/storetest` beside the existing
+  bucket-level one (`core/storetest/storetest.go`'s `Run`) —
+  `storetest.RunCASStore` / `storetest.RunLockStore`, taking a
   factory for the store value. One package, no second harness, stdlib `testing`
   only, same as today.
 - Each of `redisstore`, `pgstore`, `mongostore`, `etcdstore` calls it from the
   container test it already has (`redisstore/redisstore_test.go:40` and
-  siblings), against the same container as `tck.Run`.
+  siblings), against the same container as `storetest.Run`.
 - **A backend that fails is fixed in the backend, not by weakening the case.**
   The fix is translation: return the context's error rather than the transport's
   own. No current backend needs it — all four pass today per the audit above —
@@ -60,9 +62,9 @@ non-nil error and must not perform its write.
 
 **Reaching the store: use `export_test.go`, do not widen the public API.**
 `pgstore/pgstore.go:247` and `mongostore/mongostore.go:132` export `NewStore`;
-`redisstore/redisstore.go:37` and `etcdstore/etcdstore.go:16` keep `store`
+`redisstore/redisstore.go:37` and `etcdstore/etcdstore.go:17` keep `store`
 unexported and offer only `NewProxyManager`
-(`redisstore/redisstore.go:110`, `etcdstore/etcdstore.go:107`), and all four
+(`redisstore/redisstore.go:110`, `etcdstore/etcdstore.go:190`), and all four
 test files are external (`package redisstore_test`). An internal
 `export_test.go` in each of the two closed packages reaches the store without
 adding public surface. Whether that asymmetry should be closed for *users* is a
@@ -77,10 +79,10 @@ a store method's error is the raw driver error. The one bucket-level case below
 follows the ratified ruling — bare `ctx.Err()`, `errors.Is(err, ErrStore)`
 false (`docs/adr/0015-cancellation-is-not-a-store-failure.md`).
 
-**Relationship to roadmap row 7 (widen the TCK): sibling, not absorbed.** Row 7
+**Relationship to roadmap row 7 (widen the suite): sibling, not absorbed.** Row 7
 adds the missing *bucket-level* cases (probes, estimate,
 `TryConsumeAsMuchAsPossible`, blocking `Consume`) to the existing
-`tck.Run(t, func() *core.ProxyManager)` signature. This adds a differently
+`storetest.Run(t, func() *core.ProxyManager)` signature. This adds a differently
 shaped entry point on a different boundary, and needs `export_test.go` work in
 two backends that row 7 does not. Either can land first; neither blocks the
 other. Roadmap row 20, **tier 2** — a regression guard on a property that

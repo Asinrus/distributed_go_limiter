@@ -60,8 +60,8 @@ first thing every role reads.
 tells the Architect to open a task rather than edit it silently. The edits here
 were directed by the owner and are process/vocabulary, not code map — this file
 is the record that they were not silent. The `core/tck` references inside
-`CLAUDE.md` are deliberately left alone; they are T02's to change with the
-rename.
+`CLAUDE.md` were deliberately left alone for T02 to change with the rename,
+which it did.
 
 ## Test scenarios
 

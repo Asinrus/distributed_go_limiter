@@ -105,7 +105,7 @@ the TCK case is row 7's job. Do not silently rewrite the TCK here.
 **AC id: AC-50** (cancellation on the distributed path — AC-32 covers the local
 blocking wait only), assigned now, not at pickup. AC-49 is
 `core-initial-tokens-validation.md`, AC-51 the `ErrStore` contract, AC-52 the
-vendor conformance sibling (`ai-context/tasks/tck-vendor-ctx-conformance.md`).
+vendor conformance sibling (`ai-context/tasks/vendor-ctx-conformance.md`).
 
 **Done looks like:** an already-cancelled context never consumes a token
 through any backend, the error a caller sees is the bare context error and is
