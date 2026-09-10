@@ -13,8 +13,8 @@ import (
 // AC-46: the in-memory provider passes the full conformance suite — the same suite
 // the Redis and Postgres backends run. Only the constructor differs.
 func TestInMemoryConformance(t *testing.T) {
-	storetest.Run(t, func() *core.ProxyManager {
-		return core.NewInMemoryProxyManager()
+	storetest.Run(t, func(now func() int64) *core.ProxyManager {
+		return core.NewInMemoryProxyManager(core.WithClock(now))
 	})
 }
 
