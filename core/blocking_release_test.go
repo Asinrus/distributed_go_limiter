@@ -118,15 +118,14 @@ func (s *slowFirstGetCAS) Remove(ctx context.Context, key string) error {
 	return s.inner.Remove(ctx, key)
 }
 
-// The race: a Consume whose wait timer fires at essentially the same moment as
-// cancellation must return nil and leave the tokens consumed exactly once —
-// never released. Asserting the externally observable outcome (not which select
-// branch ran) is what makes this deterministic: with the t.Stop() guard, both
-// possible branches converge on the same result.
-func TestAC54_TimerAlreadyFiredReleasesNothing(t *testing.T) {
+// The ordinary case: a wait that completes well before cancellation returns nil
+// via the t.C branch of select, before ctx.Done() is even reached. This does
+// NOT exercise the double-spend guard (see the reservationOutcome tests below
+// for that) — Go schedules the goroutine off the timer's own readiness, so by
+// the time cancel() runs the wait is already over and the select has already
+// returned. It is here only to pin the unremarkable end-to-end behaviour.
+func TestAC54_ConsumeSucceedsWhenWaitCompletesBeforeCancel(t *testing.T) {
 	clk := newFakeClock()
-	// 5 tokens @ 1000/s -> 5ms wait, a duration real scheduling can reliably
-	// outlast before cancel() runs.
 	b := localWithClock(NewConfig(NewBandwidth(10).RefillGreedy(1000, time.Second).WithInitialTokens(0)), clk)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -136,11 +135,51 @@ func TestAC54_TimerAlreadyFiredReleasesNothing(t *testing.T) {
 	}()
 
 	err := b.AsBlocking().Consume(ctx, 5)
-	assert.NoError(t, err, "the wait had already elapsed; the consumption must stand")
+	assert.NoError(t, err)
 
 	avail, err := b.AvailableTokens(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), avail, "tokens stay consumed exactly once, not released")
+}
+
+// TestAC54_ReservationOutcomeGuardsAgainstDoubleSpend is the actual coverage for
+// the double-spend guard at core/blocking.go's ctx.Done() branch. select's
+// choice between two simultaneously-ready channels is arbitrary at runtime — no
+// test can force that choice without probabilistic looping — so the decision it
+// gates is pulled out into reservationOutcome, a pure function with no select in
+// it. Calling it directly with timerElapsed=true is the deterministic
+// equivalent of "the timer had already fired when select happened to wake on
+// ctx.Done() instead": release must not run, and nil must come back.
+func TestAC54_ReservationOutcomeGuardsAgainstDoubleSpend(t *testing.T) {
+	released := false
+	err := reservationOutcome(true, context.Canceled, func() error {
+		released = true
+		return nil
+	})
+	assert.NoError(t, err, "the wait had already elapsed; the consumption must stand")
+	assert.False(t, released, "must not double-spend by releasing an already-completed consumption")
+}
+
+// The pending case: the timer had not fired, so the release must run and the
+// bare ctx error comes back.
+func TestAC54_ReservationOutcomeReleasesWhenTimerStillPending(t *testing.T) {
+	released := false
+	err := reservationOutcome(false, context.Canceled, func() error {
+		released = true
+		return nil
+	})
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.True(t, released)
+}
+
+// A release failure folds ErrReservationNotReleased into the ctx error without
+// replacing it.
+func TestAC54_ReservationOutcomeReleaseFailureWraps(t *testing.T) {
+	err := reservationOutcome(false, context.Canceled, func() error {
+		return errFlakyStoreDown
+	})
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.ErrorIs(t, err, ErrReservationNotReleased)
 }
 
 // The release is clamped at capacity: refills that ran while the caller waited

@@ -64,21 +64,32 @@ func (bb *BlockingBucket) Consume(ctx context.Context, n int64) error {
 	case <-t.C:
 		return nil
 	case <-ctx.Done():
-		if !t.Stop() {
-			// The timer had already fired: select's choice between two ready
-			// cases is arbitrary, but the wait is over either way, so the
-			// consumption stands. Releasing here would double-spend in the
-			// caller's favour.
-			return nil
-		}
-		cErr := ctx.Err()
-		relCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), releaseTimeout)
-		defer cancel()
-		if err := bb.r.releaseTokens(relCtx, n); err != nil {
-			return fmt.Errorf("%w: %w", cErr, ErrReservationNotReleased)
-		}
-		return cErr
+		// t.Stop() returning false is the only reliable signal that the wait
+		// had already elapsed: select's choice between two simultaneously-ready
+		// cases is arbitrary, so this cannot be decided inside the select.
+		return reservationOutcome(!t.Stop(), ctx.Err(), func() error {
+			relCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), releaseTimeout)
+			defer cancel()
+			return bb.r.releaseTokens(relCtx, n)
+		})
 	}
+}
+
+// reservationOutcome decides what a done ctx means for an in-flight
+// reservation, given whether the wait's timer had already fired (timerElapsed)
+// at the moment the cancellation was observed. If it had, the consumption
+// already stands and release must not run — that would double-spend the
+// tokens back to the caller, which is worse than the bug this guards against.
+// Otherwise release walks the reservation back; a failed release folds
+// ErrReservationNotReleased into the returned ctxErr rather than replacing it.
+func reservationOutcome(timerElapsed bool, ctxErr error, release func() error) error {
+	if timerElapsed {
+		return nil
+	}
+	if err := release(); err != nil {
+		return fmt.Errorf("%w: %w", ctxErr, ErrReservationNotReleased)
+	}
+	return ctxErr
 }
 
 // maxWaitNanosFromContext returns how long we may wait: until ctx's deadline, or
