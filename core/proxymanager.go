@@ -181,3 +181,9 @@ func (pb *proxyBucket) reserveTokens(ctx context.Context, n, maxWaitNanos int64)
 	})
 	return wait, ok, err
 }
+
+func (pb *proxyBucket) releaseTokens(ctx context.Context, n int64) error {
+	return pb.do(ctx, func(s *bucketState, now int64) bool {
+		return s.release(now, n)
+	})
+}

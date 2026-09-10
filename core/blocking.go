@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"time"
 )
@@ -12,6 +13,12 @@ type BlockingBucket struct {
 	r reserver
 }
 
+// releaseTimeout bounds the best-effort refund issued when a wait is cancelled:
+// the caller's own ctx is already done, so the release runs on an independent,
+// short-lived context instead (docs/adr/0018) rather than inheriting no bound at
+// all.
+const releaseTimeout = 5 * time.Second
+
 // Consume blocks until n tokens have been consumed or ctx is done. It reserves
 // the tokens up front (computing the exact wait) and then sleeps — no busy-spin.
 //
@@ -19,8 +26,13 @@ type BlockingBucket struct {
 //   - n > capacity              -> ErrTokensExceedCapacity (never satisfiable)
 //   - ctx has a deadline the
 //     wait would exceed         -> context.DeadlineExceeded (nothing reserved)
-//   - ctx cancelled while waiting-> ctx.Err() (the reservation stands and is
-//     repaid by refill)
+//   - ctx cancelled/expired
+//     while waiting             -> the reservation is released and the bare
+//     ctx.Err() is returned; if the release itself fails, the error also
+//     satisfies errors.Is(err, ErrReservationNotReleased) — a best-effort
+//     refund, not a guaranteed one (docs/adr/0018). If the wait had already
+//     elapsed at the moment the cancellation was observed, the consumption
+//     stands: nil is returned and nothing is released.
 func (bb *BlockingBucket) Consume(ctx context.Context, n int64) error {
 	if err := validateConsume(n); err != nil {
 		return err
@@ -52,7 +64,20 @@ func (bb *BlockingBucket) Consume(ctx context.Context, n int64) error {
 	case <-t.C:
 		return nil
 	case <-ctx.Done():
-		return ctx.Err()
+		if !t.Stop() {
+			// The timer had already fired: select's choice between two ready
+			// cases is arbitrary, but the wait is over either way, so the
+			// consumption stands. Releasing here would double-spend in the
+			// caller's favour.
+			return nil
+		}
+		cErr := ctx.Err()
+		relCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), releaseTimeout)
+		defer cancel()
+		if err := bb.r.releaseTokens(relCtx, n); err != nil {
+			return fmt.Errorf("%w: %w", cErr, ErrReservationNotReleased)
+		}
+		return cErr
 	}
 }
 
