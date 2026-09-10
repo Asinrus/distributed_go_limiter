@@ -3,8 +3,9 @@
 **Blocked by:** T04. Both change how `pgstore.NewProxyManager` takes options,
 and T04 is already in flight in that file.
 
-**For:** Dev, after the open question below is answered. Do not implement past
-the ruling.
+**For:** Dev. **Queued as a follow-up — the owner chose not to build it this
+round.** The design question it carried is now ruled, so it is ready to pick up
+rather than blocked on an answer.
 
 ## The defect
 
@@ -60,48 +61,44 @@ terminates — pgx honours the context — but by driver behaviour rather than b
 this package's contract, and adding a ctx check between attempts costs one line
 now that a sleep goes there anyway.
 
-## The open question: where does the retry live?
+## Ruled: the retry lives in pgstore, as pgstore configuration
 
-`casBackoff` and `sleepCtx` are unexported in `core`, so pgstore cannot reuse
-them today. Three options were considered.
+**Owner ruling:** *"we don't need to change the `Do` signature, we just need to
+configure postgres proxy manager behaviour, that's all."* The hoisting analysis
+below was confirmed, and the export-vs-duplicate question is **closed** — not by
+picking a side, but by the reframe. If the budget and the backoff are pgstore
+*configuration*, then pgstore owns the implementation and `core`'s deliberately
+closed surface stays closed.
 
-**Option 3 — hoist the retry loop into `core`'s lock executor — is ruled out,
-and this part is not an open question.** It is the option that matches the
-project's stated principle (the algorithm lives once in `core`, every backend
-inherits it), and it is still wrong here, for a concrete reason: **the
-`LockStore` contract has no channel for "not done, retry me."**
-`Do` (`core/store.go`'s `LockStore`) returns a single `error`; "the row was not
-there and a concurrent writer created it, so try again" is signalled by
-`doOnce` returning `(false, nil)`, entirely inside pgstore. Hoisting the loop
-means adding a retry signal to `Do`'s signature — a contract change every
-future `LockStore` pays for, to generalise a race that is specific to
+**Do not export `casBackoff` or `sleepCtx`.** pgstore implements its own pacing.
+
+**The "measured constant" argument, which was the strongest case for exporting,
+weakens under this reframe — deliberately recorded rather than quietly dropped.**
+It says a value measured once must not be duplicated, and that holds for a shared
+*hard-coded* constant. A configurable default is a different thing: the number is
+a starting point a caller can move, not a tuning decision two code paths silently
+share. What must not be lost is the *provenance*, so pgstore's defaults cite the
+measurement in a comment rather than inheriting the symbol —
+`defaultMaxCASRetries` and its doc comment (`core/command.go:34-47`): 16 exhausted
+against mongostore, 32 flaked on a repeat run, 64 held across 2 redis, 3
+mongostore and 3 etcd runs. A future reader must be able to see where pgstore's
+numbers came from without a `git blame`.
+
+**Hoisting into `core`'s lock executor stays out**, and this is the part that was
+independently confirmed: **the `LockStore` contract has no channel for "not done,
+retry me."** `Do` (`core/store.go`'s `LockStore`) returns a single `error`; "the
+row was not there and a concurrent writer created it, so try again" is signalled
+by `doOnce` returning `(false, nil)`, entirely inside pgstore. Hoisting means
+adding a retry signal to `Do`'s signature — a contract change every future
+`LockStore` pays for, to generalise a race specific to
 `INSERT … ON CONFLICT DO NOTHING` followed by `SELECT … FOR UPDATE`
-(`pgstore/pgstore.go:100` states the condition). A `LockStore` built on
-advisory locks or an external lock service has no such race and nothing to put
-in that field. Generalising a vendor-specific race into the core contract is
-the opposite of what the principle asks for.
+(`pgstore/pgstore.go:100` states the condition). A `LockStore` built on advisory
+locks or an external lock service has no such race and nothing to put in that
+field. `Do` keeps its single-`error` signature.
 
-**Options 1 and 2 are an owner-level call, and I am not taking it.** The
-recommendation is option 1; the reason it is not mine to rule is that it
-changes `core`'s public API.
-
-- **Option 1 — export the pacing from `core`** (one helper, not two: a single
-  exported backoff-with-full-jitter that both the CAS loop and pgstore call).
-  **Recommended.** The thing that must not be duplicated is not fifteen lines
-  of code, it is a *tuning decision that was measured once* — base 1ms, cap
-  32ms, full jitter rather than fixed. Two copies of a measured constant drift,
-  and the next person to re-tune it will find one of them.
-- **Option 2 — duplicate it in pgstore.** Keeps `core`'s surface closed, which
-  is a real property: `core` has zero external runtime deps and a deliberately
-  small API, and this would add retry-pacing helpers to it permanently for one
-  caller outside itself.
-
-**The trade-off in one line:** option 1 spends public API surface to keep a
-measured constant in one place; option 2 spends a duplicated constant to keep
-the API closed. Neither is reversible cheaply once released — an exported
-symbol cannot be withdrawn, and a drifted constant is not noticed until it
-misbehaves. If option 1 is chosen it should get an ADR; option 2 does not need
-one.
+**No ADR.** The decision that would have earned one was exporting from `core`;
+"a backend configures its own retry behaviour" is neither surprising nor hard to
+reverse, and it fails the bar in `docs/adr/0007-tasks-done-workflow.md`.
 
 ## The budget option
 
@@ -110,16 +107,23 @@ compare-and-swap on this path — and the two budgets are not the same quantity:
 a CAS retry costs a round trip, a lock retry costs an aborted transaction. A
 caller tuning one would silently move the other.
 
-**Recommended: a backend-level `pgstore.WithMaxLockRetries`**, alongside the
-existing `pgstore.WithTTL` and siblings, not a new `core.ProxyOption`. The
-retry lives in pgstore; a core option that exactly one backend honours is worse
-than a backend option, because every other backend then has a knob that does
-nothing.
+**The shape is the Architect's call when this is picked up, not the owner's** —
+T04 made both routes available, so it has to be chosen rather than defaulted.
 
-**Why this has to be answered now rather than defaulted:** T04 makes
-`core.ProxyOption` reachable from `pgstore.NewProxyManager`. Before T04 a core
-option was not plumbable and the question answered itself; after T04 both
-shapes work, so picking by default picks silently.
+**Recommended: a backend-level `pgstore.WithMaxLockRetries`** (and a pacing knob
+if one is wanted), alongside the existing `pgstore.WithTTL` and siblings — *not*
+a forwarded `core.ProxyOption`. Three reasons, in order of weight:
+
+- A **new** core option named for locks would put lock semantics into a
+  vendor-agnostic type. That is the same objection as reusing
+  `WithMaxCASRetries`, from the other direction: every `CASStore` backend would
+  then carry a knob that does nothing, and `core` would name a strategy only one
+  backend implements.
+- It matches the ruling's own framing — "configure postgres proxy manager
+  behaviour". `pgstore.NewProxyManager` already takes `pgstore.Option`, so this
+  needs no new plumbing at all.
+- It keeps the retry's configuration next to the retry's implementation, which
+  is now the same package by the ruling above.
 
 Whatever is chosen, the default moves off 16. Match the CAS path's default of
 64 unless measurement says otherwise — the CAS measurement is evidence about
