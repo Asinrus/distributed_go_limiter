@@ -3,9 +3,11 @@
 Guidance for working in this repository.
 
 ## What this is
-A distributed **token-bucket** rate limiter for Go, ported from
-[bucket4j](https://github.com/bucket4j/bucket4j). Buckets share state through a
-pluggable storage provider. **Primary design goal: swap the provider
+A distributed **token-bucket** rate limiter for Go, rewritten from
+[bucket4j](https://github.com/bucket4j/bucket4j) — its semantics carried across,
+not its code transliterated, so a difference from the Java is not by itself a bug
+(see `docs/adr/0018-deliberate-deviations-from-bucket4j.md`). Buckets share
+state through a pluggable storage provider. **Primary design goal: swap the provider
 (local ↔ Redis ↔ Postgres) without changing any rate-limiting logic** — the
 `core.Bucket` API and all calling code stay identical; only the constructor differs.
 
@@ -22,7 +24,18 @@ architect-owned progress tracker). User-facing backend docs are in
 are recorded as ADRs in `docs/adr/`; work items track through
 `ai-context/tasks/` → `ai-context/done/`.
 
-## Layout (go.work workspace, 4 modules)
+## Vocabulary
+Three words, used precisely; they are not interchangeable.
+
+- **vendor** — the external system (Redis, Postgres, MongoDB, etcd).
+- **store** — our adapter implementing `core.CASStore` / `core.LockStore`.
+- **backend** — the Go module shipping one (`redisstore/`).
+
+"Provider" is retired except inside the ratified **provider-swap** / AC-46
+phrase, which is frozen wording. (`vendor/` is a reserved Go directory name;
+harmless, since the word is used in prose and identifiers only.)
+
+## Layout (go.work workspace, 6 modules)
 Root is a `go.work` workspace, **not** a module — build/test per module.
 
 - `core/` — API + algorithm, **zero external runtime deps**. `core` is also
@@ -31,7 +44,7 @@ Root is a `go.work` workspace, **not** a module — build/test per module.
   fail-open vs fail-closed.
   - `state.go` — the token-bucket math (single bandwidth): 3 int64s
     `[lastRefillNanos, currentSize, roundingError]`, greedy rounding-error carry +
-    intervally boundaries. Ported from bucket4j `BucketState64BitsInteger`.
+    intervally boundaries. Reduced from bucket4j's `BucketState64BitsInteger`.
   - `ops.go` — operations on state (tryConsume/estimate/reserve/…) shared by the
     local and distributed paths so the math is written once.
   - `bucket.go` — the `Bucket` interface (ctx + error; local ignores both).
@@ -48,6 +61,9 @@ Root is a `go.work` workspace, **not** a module — build/test per module.
 - `pgstore/` (package `pgstore`) — `LockStore` via `SELECT … FOR UPDATE`.
   `SchemaSQL` exposes the DDL for users who run their own migrations; `EnsureSchema`
   applies it directly.
+- `mongostore/` (package `mongostore`) — `CASStore` via a conditional `ReplaceOne`.
+- `etcdstore/` (package `etcdstore`) — `CASStore` via `Txn` comparing on
+  `clientv3.Value`; expiry rides an etcd lease.
 - `examples/` — two `main` packages (`examples/redis/`, `examples/postgres/`), each
   with a `docker-compose.yml`. **The `net/http` lives here, in the demo programs —
   not in `core`.** Only backend-specific line is the `*core.ProxyManager` constructor;
