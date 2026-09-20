@@ -69,9 +69,6 @@ jobs:
 
       - name: govulncheck
         run: |
-          # v1.8.0+ requires go >= 1.26.0, which the pin above doesn't provide.
-          # v1.7.0 is the newest release that builds and runs under 1.25.x;
-          # bump this once go-version above moves to 1.26+.
           go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
           FAILED=0
           while IFS= read -r dir; do
