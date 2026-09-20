@@ -1,16 +1,29 @@
-# Where this port deliberately deviates from bucket4j
+# Where this rewrite decides differently from bucket4j
 
-`CLAUDE.md` opens by calling this a port of bucket4j, and `core/state.go:6`
-calls the state a direct reduction of `BucketState64BitsInteger`. That framing
-is load-bearing: when the Go code and the Java code disagree, the default
-assumption — correctly — is that the Go code is wrong. This ADR names the two
-places where the disagreement is a decision, so that a future contributor who
-reads the upstream source does not "fix" them back out.
+This project **rewrites** bucket4j in Go; it does not transliterate it. Java and
+Go do not map onto each other in either direction, so what has to carry across is
+the intent and the observable behaviour, not the structure. Where a Java
+construct has no good Go expression, the Go expression wins — and sometimes no
+faithful equivalent exists at all, which is an expected outcome of a rewrite
+rather than a defect in one.
 
-Both deviations were checked against upstream at the source, not from memory.
-Both are about the *observable API*, not the algorithm: the token math in
-`core/state.go` stays a faithful reduction, and nothing here changes what a
-bucket lets through.
+So a difference between this code and the upstream Java is **not by itself
+evidence that this code is wrong**; each difference stands or falls on its own
+reasoning. What that costs is discoverability. The upstream source is easy to
+find and the reasoning behind a difference is not, so a contributor who spots one
+has no way to tell a decision from an accident. This ADR records the two
+differences that were *decided*, with the reasoning, so nobody undoes one while
+believing they are fixing a porting bug.
+
+The filename still says "deviations" — the word this ADR was ratified under, and
+the wrong word for a rewrite, since it implies a norm being departed from. The
+number is the stable identifier and the slug is decoration, but three
+`ai-context/` files link to this one by full path; renaming to correct one word
+costs more than it fixes.
+
+Both differences were checked against upstream at the source, not from memory.
+Both are about the *observable API*, not the algorithm: neither changes the token
+math in `core/state.go`, and neither changes what a bucket lets through.
 
 ## 1. No read exposes a negative token count (AC-53)
 
@@ -25,8 +38,8 @@ count.
 reading below zero, and a caller that renders it into a `RateLimit-Remaining`
 header or a dashboard has nothing sensible to do with `-5`.
 
-The port had already deviated, but *inconsistently*, which is what forced the
-decision: two of the three reads clamp with `max0` (`core/ops.go:40` and
+This code already differed from upstream, but *inconsistently*, which is what
+forced the decision: two of the three reads clamp with `max0` (`core/ops.go:40` and
 `core/ops.go:55`, the probe reject branches), upstream clamps none of them, and
 `core/ops.go:77` is the only read still faithful to upstream. Ruling one way or
 the other was unavoidable; ruling toward the clamp makes one read agree with
@@ -87,12 +100,12 @@ Both of these are one-line changes with a plausible-looking upstream source
 arguing the opposite, and the upstream source is more discoverable than the
 reasoning. Without this file the failure mode is concrete: a contributor reads
 `BlockingBucket.java:47-51`, sees an explicit deliberate decision, and reverts
-the refund as a port fidelity fix. Recording the trade-off is the only thing
-that stops that.
+the refund in the belief that matching Java is the goal. Recording the trade-off
+is the only thing that stops that.
 
 One thing this ADR does **not** claim: that upstream's reservation design was
 examined and found wanting. It was examined. The only stated rationale for
 reservations in bucket4j is four words — "reserved in fair manner"
 (`BlockingBucket.java:44`) — with no fairness, FIFO or thundering-herd
 discussion anywhere in the asciidoc documentation or the commit history. The
-mechanism is kept as ported; only its two observable edges move.
+mechanism is kept as it stands; only its two observable edges move.

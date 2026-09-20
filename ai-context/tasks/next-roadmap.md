@@ -40,7 +40,7 @@ of them change rows here:
   cost is CI upkeep, accepted. This un-defers row 20.
 - **Hazelcast is not being built now** — reversible, no ADR, filed to
   `ai-context/done/vendor-hazelcast-store.md`.
-- **AC-53 and AC-54 are deliberate deviations from bucket4j**, not bug fixes
+- **AC-53 and AC-54 are decided differences from bucket4j**, not bug fixes
   (`docs/adr/0018-deliberate-deviations-from-bucket4j.md`). Rows 21 and 22 are
   now one ticket, `t03-reservation-semantics.md`.
 
@@ -72,7 +72,7 @@ works it.
 | 18 | Say the codec layout is unstable | Nothing states that `core/codec.go`'s byte layout may change before v1.0, yet row 17 will change it. `docs/client/redis.md` and siblings each have a "what is stored" section — the natural home. Cheap, and it must land *before* v0.2, not with it: a format break is only safe if the promise was made first | 3 |
 | 19 | Cut store round-trips without vendor code | Owner constraint, ruling (3): `core` stays vendor-agnostic — no per-vendor knowledge, no backend-specific fast paths. The way to reduce calls is the command layer (`core/command.go`), so every backend inherits it; bucket4j's optimization controllers (batching, prediction, delayed writes) are the reference. **Unscoped** — `CLAUDE.md` lists optimization/batching as deferred from v1 (ADR 0001), and this needs Architect scoping and a task file before anyone implements it | later |
 | 20 | Vendor ctx conformance (`tck-vendor-ctx-conformance.md`) | **Un-deferred** — the etcd question is answered (it stays, as a peer; `ai-context/done/etcd-as-a-main-backend.md`), so this covers four backends. Filed as a bug hunt; the premise was false — all four drivers already return `errors.Is(err, context.Canceled)`, etcd included (`ContextError`, `client.go:578-598`). Reframed as a regression guard against a driver upgrade or a fifth backend dropping the property. Still real: nothing in the repo exercises a cancelled ctx against a real backend | 2 |
-| 22 | Refund a cancelled blocking reservation (`t03-reservation-semantics.md`, spec in `core-blocking-reservation-refund.md`) | `core/ops.go:90` deducts before the sleep and the write is persisted, so a cancel at `core/blocking.go:54-55` leaves the tokens spent for a request nobody was served — `core/blocking.go:22-23` documents that as intended and the owner has ruled it is not. Compensating release through the executor on the cancel branch, best-effort but reported (AC-54). Now framed as a **deliberate deviation** from bucket4j, not a bug fix — upstream never refunds, on purpose (ADR 0018) | 1 |
+| 22 | Refund a cancelled blocking reservation (`t03-reservation-semantics.md`, spec in `core-blocking-reservation-refund.md`) | `core/ops.go:90` deducts before the sleep and the write is persisted, so a cancel at `core/blocking.go:54-55` leaves the tokens spent for a request nobody was served — `core/blocking.go:22-23` documents that as intended and the owner has ruled it is not. Compensating release through the executor on the cancel branch, best-effort but reported (AC-54). Now framed as a **decided difference** from bucket4j, not a bug fix — upstream never refunds, on purpose (ADR 0018) | 1 |
 
 Row 21 is AC-53 (negative `AvailableTokens`). Its spec was rescued off an
 unmerged branch into `ai-context/tasks/core-available-tokens-negative.md`; the
