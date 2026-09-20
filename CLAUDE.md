@@ -3,9 +3,11 @@
 Guidance for working in this repository.
 
 ## What this is
-A distributed **token-bucket** rate limiter for Go, ported from
-[bucket4j](https://github.com/bucket4j/bucket4j). Buckets share state through a
-pluggable storage provider. **Primary design goal: swap the provider
+A distributed **token-bucket** rate limiter for Go, rewritten from
+[bucket4j](https://github.com/bucket4j/bucket4j) — its semantics carried across,
+not its code transliterated, so a difference from the Java is not by itself a bug
+(see `docs/adr/0018-deliberate-deviations-from-bucket4j.md`). Buckets share
+state through a pluggable storage provider. **Primary design goal: swap the provider
 (local ↔ Redis ↔ Postgres) without changing any rate-limiting logic** — the
 `core.Bucket` API and all calling code stay identical; only the constructor differs.
 
@@ -42,7 +44,7 @@ Root is a `go.work` workspace, **not** a module — build/test per module.
   fail-open vs fail-closed.
   - `state.go` — the token-bucket math (single bandwidth): 3 int64s
     `[lastRefillNanos, currentSize, roundingError]`, greedy rounding-error carry +
-    intervally boundaries. Ported from bucket4j `BucketState64BitsInteger`.
+    intervally boundaries. Reduced from bucket4j's `BucketState64BitsInteger`.
   - `ops.go` — operations on state (tryConsume/estimate/reserve/…) shared by the
     local and distributed paths so the math is written once.
   - `bucket.go` — the `Bucket` interface (ctx + error; local ignores both).
