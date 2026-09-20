@@ -1,4 +1,4 @@
-# T01 — Record the owner's eight rulings
+# T01 — Record the owner's rulings
 
 **Blocked by:** none. This is the head of the T01→T05 chain; T02 and T03 both
 wait on it because they build on decisions ratified here.
@@ -33,15 +33,26 @@ rulings the other four tickets rest on.
 8. **Vocabulary:** *vendor* / *store* / *backend*, with "provider" retired
    except inside the frozen provider-swap / AC-46 phrase. Recorded in
    `CLAUDE.md`.
+9. **This is a rewrite, not a port** (added in review of the PR for this
+   ticket). Java and Go do not map one-to-one either way, so intent and
+   observable behaviour are what carry across, not structure; where a Java
+   construct has no good Go expression the Go expression wins, and sometimes no
+   faithful equivalent exists at all. A difference from upstream is therefore
+   not by itself evidence the Go is wrong — each stands on its own reasoning.
+   Recorded as the premise of ADR 0018 and in `CLAUDE.md`. **No separate ADR:**
+   it reverses no earlier decision and is stated where a reader of either file
+   already lands, which a third file would not improve.
 
 ## What was produced
 
 - `docs/adr/0018-deliberate-deviations-from-bucket4j.md` — rulings 2 and 3
-  together, with the upstream citations. This is the load-bearing artifact:
-  both deviations are one-line changes with a plausible-looking upstream source
-  arguing the opposite, and without the ADR the predictable failure is a
-  contributor reading `BlockingBucket.java:47-51` and reverting the refund as a
-  port-fidelity fix.
+  together, with the upstream citations, framed by ruling 9. This is the
+  load-bearing artifact: both are one-line changes with a plausible-looking
+  upstream source arguing the opposite, and without the ADR the predictable
+  failure is a contributor reading `BlockingBucket.java:47-51` and reverting the
+  refund in the belief that matching Java is the goal. The filename keeps
+  "deviations" although the H1 no longer does — the number is the stable id and
+  three files link to the path.
 - `CLAUDE.md` — the ruling-8 glossary, and the module count corrected from 4 to
   6 (`mongostore/` and `etcdstore/` were missing from the layout list
   entirely).
@@ -82,7 +93,7 @@ properties are documentary and belong to review, not to a test binary:
 - Nothing under `core/`, `redisstore/`, `pgstore/`, `mongostore/`,
   `etcdstore/` or `examples/` is modified.
 
-**Done looks like:** every one of the eight rulings is discoverable from
+**Done looks like:** every one of the rulings is discoverable from
 `docs/adr/` or `ai-context/` without asking the owner again, and the two
 rulings that contradict upstream carry the upstream citation that would
 otherwise reopen them.
