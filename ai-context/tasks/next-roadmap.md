@@ -73,10 +73,13 @@ was measured — every store uses the same seven `core` symbols and nothing
 else, all interfaces or constructors, and the v0.2 codec break touches none of
 them — so a store needs no release when `core`'s internals move. The contract
 that replaces the shared number is `core`'s exported interfaces, with a
-store's own `go.mod` naming the `core` it was tested against and
-`GOWORK=off go test ./...` as the runnable check for any other pair. No row is
-re-ranked by this; `t08` and `t10` have reworded asks, and row 15's steps are
-unchanged.
+store's own `go.mod` naming the `core` it was tested against and a runnable
+check for any other pair. That check is **not** `cd <store> && GOWORK=off go
+test ./...`, as 0021 first said — amended there by
+`docs/adr/0022-replace-directives-are-not-redundant.md`, which measured that
+the store's `replace` resolves `core` to the working tree whatever `require`
+says. No row is re-ranked by any of this; `t08` and `t10` have reworded asks,
+and row 15's steps are rewritten by 0022.
 
 The `path:line` references are the evidence for each row. Rows 11, 15, 18, 24,
 25 and 26 were re-verified against `890f6b1` with the release scoping, and rows
@@ -101,7 +104,7 @@ works it.
 | 12 | Fix dead paths | `ai-context/done/tester-e2e-sandbox-harness.md:13,24,45,46` points at `examples/k6/`; the harness lives at `e2e/k6/` (the other citation, `ai-context/PLANS.md`, is moot — that file is now deleted, `docs/adr/0016-retire-plans-md.md`) | 3 |
 | 13 | Greedy refill `ceil` | `core/state.go:158` truncates the division where it needs to round up, so a client that sleeps exactly the advertised wait is rejected again. The intervally branch two lines up (`core/state.go:138-140`) rounds up explicitly, which is the asymmetry that makes this look like a bug — but `core/state.go:6` calls the whole state a direct reduction of `BucketState64BitsInteger` (and `delayNanosForConsume`'s own doc at `core/state.go:111-113` claims nothing either way), so whoever picks this up establishes what bucket4j does *before* changing it; a decided difference from bucket4j is a different task than a fix | 3 |
 | 14 | Example hardening | All four `examples/*/main.go` echo `err.Error()` into the 503 store-failure body (`examples/redis/main.go:44`), and every backend formats the bucket key into that error (`etcdstore/etcdstore.go:28` and siblings), so the client's own IP comes back to it along with the internal failure. No `Retry-After` on the 429 either, though `TryConsumeAndReturnRemaining` already has the wait | 2 |
-| 15 | Publish v0.1.0 (`publish-v0.1.0.md`) | **No longer dormant — ruling (1) reversed.** Now the *tagging* ticket and the last step of the release: drop the `replace` lines, require `core v0.1.0`, cut five `*/v0.1.0` tags. Blocker (c) is the latent defect `go.work` hides (`redisstore/go.mod:6,65` and siblings) — `AC-61`. Three commits with a tag round between them; it cannot be one commit. Blocked by rows 11, 18, 24, 25 and 26; PRs #25–#30 have all landed (`890f6b1`). Blocker (a) (private) is deferred, so the release is *tagged but unpublished* | now |
+| 15 | Publish v0.1.0 (`publish-v0.1.0.md`) | **No longer dormant — ruling (1) reversed.** Now the *tagging* ticket and the last step of the release: require `core v0.1.0`, **keep every `replace`**, cut five `*/v0.1.0` tags. Blocker (c) is the latent defect `go.work` and the `replace` lines hide together (`redisstore/go.mod:6,65` and siblings) — `AC-61`. **Correction to this row's own claim:** "drop the `replace` lines" and "three commits, it cannot be one commit" were both wrong — the lines are load-bearing and the bump is one commit followed by five tags, ruled in `docs/adr/0022-replace-directives-are-not-redundant.md`. Blocked by rows 11, 18, 24, 25 and 26; PRs #25–#30 have all landed (`890f6b1`). Blocker (a) (private) is deferred, so the release is *tagged but unpublished* | now |
 | 16 | _(closed)_ | No open questions remain in `ai-context/tasks/`. `plans-md-vs-changelog.md` ruled (ADR 0016), `q5-pgstore-identifier-behavior-change.md` and `q9-errstore-contract-ac.md` in `done/`, `vendor-hazelcast-store.md` answered by ruling (6) and moved | — |
 | 17 | Codec format change: multi-bandwidth + config fingerprint | Planned for **v0.2**. One format break carries both — the multi-bandwidth layout (N states instead of one, per ADR 0001, which deferred it from v1 and is not contradicted by planning it for v0.2) and the config fingerprint from row 9. Needs its own task file and probably an ADR before anyone writes code | later |
 | 18 | Say the codec layout is unstable (`t09-codec-layout-is-unstable.md`) | **Release blocker now, not tier 3** — a v0.1.0 that stays silent makes row 17's v0.2 format break a breaking surprise. Nothing states that `core/codec.go:8-15`'s byte layout may change before v1.0. **Correction to this row's own claim:** only `docs/client/redis.md:54` and `etcd.md:41` have a "What is stored" section; `postgres.md:28` and `mongodb.md:22` call it "Schema". All four get the promise, under whichever heading they already use. The format itself is already pinned by `core/codec_test.go:44`, so no new test — the tripwire exists, it just does not say where the promise lives | now |
