@@ -5,10 +5,11 @@ and progress. This folder is **committed**, alongside `docs/adr/` (ratified
 decisions) — see below for why that replaced the old local-only `docs/internal/`.
 
 ## Project in one line
-A distributed **token-bucket** rate limiter (port of bucket4j). `core` owns the
-algorithm + `Bucket` API; storage providers (local, Redis, Postgres) implement a
-tiny `Store`. **Primary goal: swap the provider without changing rate-limiting
-logic** — the same conformance suite (`core/storetest`) passes against all three.
+A distributed **token-bucket** rate limiter, rewritten from bucket4j. `core` owns
+the algorithm + `Bucket` API; storage providers (local, Redis, Postgres, MongoDB,
+etcd) implement a tiny `Store`. **Primary goal: swap the provider without
+changing rate-limiting logic** — the same conformance suite (`core/storetest`)
+passes against all five.
 
 ## What lives where
 | Path | Contents |
@@ -17,7 +18,7 @@ logic** — the same conformance suite (`core/storetest`) passes against all thr
 | `ai-context/tasks/` | One file per work item (dev or investigation), created by the Architect — including the **Test scenarios** section Dev and the Tester both work from (`ai-context/tasks/README.md`). Moves to `ai-context/done/` only when the tester agent confirms both `/verify` and an end-to-end run pass. `next-roadmap.md` in the same folder is the standing queue index (not itself a work item, doesn't move to `done/`). |
 | `ai-context/done/` | Completed, tester-verified task files. |
 | `docs/adr/` | One file per ratified decision that's hard to reverse, surprising without context, and the result of a real trade-off — see `docs/adr/0007-tasks-done-workflow.md`. |
-| `docs/client/` | User-facing backend docs (`redis.md`, `postgres.md`). |
+| `docs/client/` | User-facing backend docs (`redis.md`, `postgres.md`, `mongodb.md`, `etcd.md`). |
 | `.claude/agents/` | `architect.md`, `dev.md`, `investigator.md`, `tester.md` — the roles below, in executable form. |
 | `.claude/commands/` | `/verify` — full suite across every workspace module; dispatches the investigator on failure. |
 | `CLAUDE.md` | Code map + build/test commands. **Dev-owned** — it follows the code, so Dev updates it; the Architect opens a task in `ai-context/tasks/` rather than editing it silently. |

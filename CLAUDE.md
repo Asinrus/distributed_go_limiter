@@ -72,9 +72,10 @@ Root is a `go.work` workspace, **not** a module — build/test per module.
   hop away from `main()`.
 
 ## Conventions
-- **TDD, tests first.** The acceptance criteria (in `ai-context/`) are the contract;
-  each criterion has a stable ID (AC-11 … AC-46) referenced from the test name
-  (`TestAC12_...`). The shared `core/storetest` suite is their executable form.
+- **TDD, tests first.** The acceptance criteria are the contract; each has a
+  stable ID (AC-11 … AC-46) referenced from the test name (`TestAC12_...`). There
+  is no standing AC registry — `grep -rn 'AC-'` is the index — and the shared
+  `core/storetest` suite is their executable form.
 - **Comments earn their place.** Godoc on every exported symbol, plus comments that
   explain a *why* the code cannot. No restating the code, no tutorial narrative.
   A deliberate trade-off gets a comment naming its limit and what would justify
@@ -84,7 +85,9 @@ Root is a `go.work` workspace, **not** a module — build/test per module.
 - New distributed backend = implement `core.CASStore` **or** `core.LockStore`, then
   `core.NewCASProxyManager` / `core.NewLockProxyManager`, then run `storetest.Run` against it.
 - Time source: local buckets use a monotonic clock; distributed use wall-clock epoch
-  (shared across nodes). Both injectable via `WithClock` for tests.
+  (shared across nodes). The distributed clock is injectable via `WithClock`
+  (a `core.ProxyOption`); `NewLocalBucket` takes no options — the local path
+  injects through the unexported `newLocalBucketClock`, for tests in `core` only.
 
 ## Go version
 One version, `go 1.25.0`, for every `go.mod` and `go.work` — no per-module

@@ -13,9 +13,6 @@ in this folder.
 `docs/adr/0006-testcontainers-for-backend-tck.md`). New module added to
 `go.work`. `examples/hazelcast/` demo mirroring the existing two.
 
-**Status:** Unscoped — first step for whoever picks this up is scoping it
-with the Architect, not implementing directly.
-
 **Note:** Memcached was considered alongside this and dropped from scope —
 see `git log -p -- ai-context/PLANS.md` (`_restructure_` changelog entry;
 the file itself is retired, `docs/adr/0016-retire-plans-md.md`).
