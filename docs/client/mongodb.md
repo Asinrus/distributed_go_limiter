@@ -14,7 +14,8 @@ That is the entire MongoDB-specific surface. Everything after it — `pm.Bucket(
 
 | Option | Default | Effect |
 |---|---|---|
-| `WithTTL(d)` | `0` (no expiry) | Marks state stale after this long. See cleanup below. |
+| `WithTTL(d)` | `0` (no expiry) | Marks state stale after this long. Sugar for `WithProxyOption(core.WithExpireAfterWrite(d))`. See cleanup below. |
+| `WithProxyOption(o)` | — | Forwards a `core.ProxyOption` (`core.WithClock`, `core.WithMaxCASRetries`, `core.WithExpireAfterWrite`, …) to the underlying `core.ProxyManager`. |
 
 There is no collection-name option: `NewProxyManager` takes a `*mongo.Collection`, so the
 collection itself is the namespace, matching `redisstore`'s `redis.Cmdable` shape.

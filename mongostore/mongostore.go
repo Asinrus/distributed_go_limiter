@@ -39,8 +39,14 @@ func live(now time.Time) bson.M {
 // want NewProxyManager instead.
 type Store struct {
 	coll *mongo.Collection
-	ttl  time.Duration
 	now  func() time.Time
+
+	// coreOpts stages core.ProxyOption values (including the TTL translated by
+	// WithTTL) until NewProxyManager forwards them to core.NewCASProxyManager.
+	// It has no effect on a Store built via NewStore directly and used as a
+	// bare core.CASStore — expiry there comes from the ttl core/command.go
+	// passes into CompareAndSwap, not from this field.
+	coreOpts []core.ProxyOption
 }
 
 var _ core.CASStore = (*Store)(nil)
@@ -104,8 +110,19 @@ func (s *Store) Remove(ctx context.Context, key string) error {
 // Option configures the MongoDB backend.
 type Option func(*Store)
 
-// WithTTL sets an expire-after-write TTL on bucket state (0 = no expiry).
-func WithTTL(d time.Duration) Option { return func(s *Store) { s.ttl = d } }
+// WithTTL sets an expire-after-write TTL on bucket state (0 = no expiry). It is
+// sugar for WithProxyOption(core.WithExpireAfterWrite(d)).
+func WithTTL(d time.Duration) Option {
+	return func(s *Store) { s.coreOpts = append(s.coreOpts, core.WithExpireAfterWrite(d)) }
+}
+
+// WithProxyOption forwards a core.ProxyOption — core.WithClock,
+// core.WithMaxCASRetries, core.WithExpireAfterWrite, or any future one — to the
+// underlying core.ProxyManager, so nothing core exposes is unreachable from this
+// constructor.
+func WithProxyOption(o core.ProxyOption) Option {
+	return func(s *Store) { s.coreOpts = append(s.coreOpts, o) }
+}
 
 // IndexModels returns the TTL index used by EnsureIndexes: storage reclamation
 // only, since expiry correctness comes from the query filter in GetState and
@@ -142,5 +159,5 @@ func NewStore(coll *mongo.Collection, opts ...Option) *Store {
 // returned core.ProxyManager exactly like any other backend.
 func NewProxyManager(coll *mongo.Collection, opts ...Option) *core.ProxyManager {
 	s := NewStore(coll, opts...)
-	return core.NewCASProxyManager(s, core.WithExpireAfterWrite(s.ttl))
+	return core.NewCASProxyManager(s, s.coreOpts...)
 }
