@@ -62,8 +62,9 @@ was deleted.
 documents it in the method contract — if the thread is interrupted while
 blocked, "tokens will be not returned back to bucket" — and offers
 `Bucket#addTokens(long)` as the caller's escape hatch. The implementation
-matches: `AbstractBucket.java:198-204` is a bare catch-and-rethrow with no
-`finally` block. `BlockingConsumeSpecification.groovy:116-128` pins the
+matches: `AbstractBucket.java:198-204` catches, notifies the listener
+(`onInterrupted`) and rethrows — with no `finally`, so nothing gives the
+tokens back. `BlockingConsumeSpecification.groovy:116-128` pins the
 behaviour with a test, so it is not an oversight anyone drifted into.
 
 **Here, the cancel branch releases the reservation** through the same executor

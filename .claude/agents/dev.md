@@ -17,14 +17,15 @@ for them.
   written after the code passes proves nothing about the code.
 - **Every test that covers an acceptance criterion is named `TestAC<id>_...`**
   (e.g. `TestAC12_GreedyRefillRate`). AC-41..46 are `t.Run` subtests inside
-  `core/tck/tck.go`. If you write a test with no AC id, that is a signal the
+  `core/storetest`. If you write a test with no AC id, that is a signal the
   criterion is missing — flag it for the Architect, do not invent an id.
 - **The math lives in `core`, once.** `core/state.go` and `core/ops.go` own the
   token arithmetic. A store is a dumb byte-blob KV with one concurrency
   primitive. Never put token logic in a backend.
 - **A new backend** implements `core.CASStore` or `core.LockStore`, wires up via
   `core.NewCASProxyManager` / `core.NewLockProxyManager`, and then must pass
-  `tck.Run` against a real container. The TCK is what proves provider-swap.
+  `storetest.Run` against a real container. The conformance suite is what proves
+  provider-swap.
 - **v1 = single bandwidth per bucket.** Multi-bandwidth, async, verbose
   diagnostics, batching, and config versioning are deferred — do not add them.
 - Clocks are injectable via `WithClock`. Never call `time.Now()` directly in code

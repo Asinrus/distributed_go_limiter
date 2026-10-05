@@ -13,7 +13,8 @@ each new case costs a real sleep on four containers.
 `core/storetest/storetest.go`'s `Run` runs exactly four cases: AC-41 key isolation, AC-42
 consistency under contention, AC-43 atomic init, AC-44 removal. Meanwhile
 `README.md` advertises provider-swap (AC-46) as the project's central claim,
-and `ai-context/README.md` says the same suite passes against every backend.
+and `ai-context/README.md:11` says the same suite passes against "all three"
+backends — itself stale now that there are four (roadmap row 11).
 
 Four cases do not carry that claim. `TryConsumeAndReturnRemaining` (AC-17),
 `EstimateAbilityToConsume` (AC-18), `TryConsumeAsMuchAsPossible` (AC-19) and
