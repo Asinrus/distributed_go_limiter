@@ -60,7 +60,7 @@ Modules that are `main` packages with no tests (`examples`) only need `go build 
 ## On failure
 
 Report the failing test name and the AC id it maps to (tests are named `TestAC<id>_...`;
-AC-41..44 are `t.Run` subtests in `core/tck/tck.go`, run identically by every backend).
+AC-41..44 are `t.Run` subtests in `core/storetest`, run identically by every backend).
 
 Do not fix it inline. Dispatch the **investigator** agent to write its findings into the
 relevant task file in `ai-context/tasks/` first (ask the architect to create one if none

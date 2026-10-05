@@ -2,6 +2,7 @@ package pgstore_test
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -13,6 +14,20 @@ import (
 	"github.com/stretchr/testify/require"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 )
+
+// fakeClock is a controllable clock for driving refills without a wall-clock
+// sleep. core has its own (core/local_test.go) but it is unexported and this
+// package sits across a module boundary, so it is re-declared here.
+type fakeClock struct{ ns atomic.Int64 }
+
+func newFakeClock() *fakeClock {
+	c := &fakeClock{}
+	c.ns.Store(time.Now().UnixNano())
+	return c
+}
+
+func (c *fakeClock) now() int64              { return c.ns.Load() }
+func (c *fakeClock) advance(d time.Duration) { c.ns.Add(int64(d)) }
 
 func startPostgres(t *testing.T) *pgxpool.Pool {
 	t.Helper()
@@ -47,8 +62,8 @@ func startPostgres(t *testing.T) *pgxpool.Pool {
 // AC-41..44 on real Postgres — the same suite the in-memory and Redis backends run.
 func TestPostgresConformance(t *testing.T) {
 	pool := startPostgres(t)
-	storetest.Run(t, func() *core.ProxyManager {
-		return pgstore.NewProxyManager(pool)
+	storetest.Run(t, func(now func() int64) *core.ProxyManager {
+		return pgstore.NewProxyManager(pool, pgstore.WithProxyOption(core.WithClock(now)))
 	})
 }
 
@@ -228,4 +243,46 @@ func TestEnsureSchemaRejectsLegacyBigintTable(t *testing.T) {
 	// A fresh table name still goes through cleanly, and is idempotent.
 	require.NoError(t, pgstore.EnsureSchema(ctx, pool, pgstore.WithTable("fresh_bucket")))
 	require.NoError(t, pgstore.EnsureSchema(ctx, pool, pgstore.WithTable("fresh_bucket")))
+}
+
+// core.WithClock reaches the Postgres constructor via WithProxyOption, so a
+// refill can be driven against a real container with no wall-clock sleep —
+// the capability T05 is built on.
+func TestPostgresWithClockDrivesRefillWithNoSleep(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	clk := newFakeClock()
+	pm := pgstore.NewProxyManager(pool, pgstore.WithProxyOption(core.WithClock(clk.now)))
+	cfg := core.NewConfig(core.NewBandwidth(10).RefillGreedy(10, time.Second))
+
+	b, err := pm.Bucket("clock-refill", cfg)
+	require.NoError(t, err)
+
+	ok, err := b.TryConsume(ctx, 10)
+	require.NoError(t, err)
+	require.True(t, ok, "drain the bucket")
+
+	av, err := b.AvailableTokens(ctx)
+	require.NoError(t, err)
+	require.Equal(t, int64(0), av)
+
+	clk.advance(time.Second)
+
+	av, err = b.AvailableTokens(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(10), av, "refilled per the injected clock, no wall-clock sleep")
+}
+
+// core.WithMaxCASRetries reaches the Postgres constructor, and an
+// out-of-range value is rejected exactly as on the in-memory manager (AC-55)
+// — proof the plumbing is generic, not special-cased for the clock. It has
+// no effect on a lock-based backend, but the validation still runs.
+func TestPostgresMaxCASRetriesReachableAndValidated(t *testing.T) {
+	pool := startPostgres(t)
+	pm := pgstore.NewProxyManager(pool, pgstore.WithProxyOption(core.WithMaxCASRetries(0)))
+	cfg := core.NewConfig(core.NewBandwidth(10).RefillGreedy(1, time.Hour))
+
+	b, err := pm.Bucket("max-retries", cfg)
+	assert.ErrorIs(t, err, core.ErrInvalidConfig)
+	assert.Nil(t, b)
 }

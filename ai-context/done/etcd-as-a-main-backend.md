@@ -60,9 +60,11 @@ Facts checked against `origin/main`, not estimated:
   reference implementation, not a near-term release. Under that goal "four
   stores, one suite" reads differently than it would for a shipping library,
   where each backend is a support obligation.
-- **It works today.** TCK green on a real container, k6 sandbox green
-  (`ai-context/PLANS.md` phase 8). Nothing here is a rescue; the question is
-  whether to keep paying, not whether to finish.
+- **It works today.** Conformance suite green on a real container, k6 sandbox
+  green — recorded in `ai-context/PLANS.md`'s phase 8 at the time, a file since
+  retired (`docs/adr/0016-retire-plans-md.md`); the surviving evidence is
+  `ai-context/done/vendor-etcd-store.md` and the suite itself. Nothing here is a
+  rescue; the question is whether to keep paying, not whether to finish.
 
 ## The options
 
@@ -122,4 +124,4 @@ and covers four backends; roadmap row 8 (`ProxyOption` forwarding) plumbs four.
 `etcdstore/etcdstore_test.go:245` today, not `:132`; `:132` is now the
 lease-count test, which has no sleep. The underlying point stands — etcd's
 minimum lease TTL is server-side and `core.WithClock` cannot shorten it, so
-roadmap row 8 does not make that test instant. See `t04-proxyoption-backends.md`.
+roadmap row 8 does not make that test instant. See `t04-proxyoption-reaches-backends.md`.

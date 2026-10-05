@@ -14,7 +14,8 @@ the same one `core.NewInMemoryProxyManager()` gives you with no container at all
 | Option | Default | Effect |
 |---|---|---|
 | `WithKeyPrefix(p)` | `""` | Namespaces bucket keys (e.g. `"dgl:"`). |
-| `WithTTL(d)` | `0` (no expiry) | Expire-after-write on the bucket key. |
+| `WithTTL(d)` | `0` (no expiry) | Expire-after-write on the bucket key. Sugar for `WithProxyOption(core.WithExpireAfterWrite(d))`. |
+| `WithProxyOption(o)` | — | Forwards a `core.ProxyOption` (`core.WithClock`, `core.WithMaxCASRetries`, `core.WithExpireAfterWrite`, …) to the underlying `core.ProxyManager`. |
 
 ## `WithTTL` is the whole cleanup story
 

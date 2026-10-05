@@ -10,10 +10,11 @@ each new case costs a real sleep on four containers.
 
 ## Why
 
-`core/tck/tck.go:33-38` runs exactly four cases: AC-41 key isolation, AC-42
+`core/storetest/storetest.go`'s `Run` runs exactly four cases: AC-41 key isolation, AC-42
 consistency under contention, AC-43 atomic init, AC-44 removal. Meanwhile
 `README.md` advertises provider-swap (AC-46) as the project's central claim,
-and `ai-context/README.md` says the same suite passes against every backend.
+and `ai-context/README.md:11` says the same suite passes against "all three"
+backends — itself stale now that there are four (roadmap row 11).
 
 Four cases do not carry that claim. `TryConsumeAndReturnRemaining` (AC-17),
 `EstimateAbilityToConsume` (AC-18), `TryConsumeAsMuchAsPossible` (AC-19) and
@@ -24,8 +25,8 @@ would pass the whole suite today. Those are exactly the operations where a
 distributed path can differ from a local one — they read more state, and one of
 them writes a negative count through the codec.
 
-Note this ticket is named against `core/tck` because T02 has not landed yet;
-by the time it is worked, the package is `core/storetest`.
+T02 has landed: the package is `core/storetest` and the entry point is
+`storetest.Run`.
 
 ## New AC ids
 
@@ -54,7 +55,7 @@ AC-41 … AC-44 already relate to their local siblings.
 - Every new case drives time through the injected clock T04 makes reachable —
   **no wall-clock sleeps in the suite.** The suite runs on four containers in
   CI; a sleep is paid four times, every push.
-- `slowConfig` (`core/tck/tck.go:27`) exists to make refill a non-event. AC-56,
+- `slowConfig` (`core/storetest`) exists to make refill a non-event. AC-56,
   AC-58 and AC-59 all need refill to actually happen, so they need a second
   config helper rather than a mutated `slowConfig` — the existing four cases
   depend on refill staying negligible.
@@ -70,7 +71,7 @@ AC-41 … AC-44 already relate to their local siblings.
   adding it here would make T05 fail for T03's reasons.
 - Vendor ctx-conformance (roadmap row 20) — un-deferred now that etcd is
   settled, but a separate row with its own file
-  (`ai-context/tasks/tck-vendor-ctx-conformance.md`).
+  (`ai-context/tasks/vendor-ctx-conformance.md`).
 - Any change to the four existing cases.
 
 ## Test scenarios

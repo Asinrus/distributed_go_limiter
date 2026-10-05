@@ -8,7 +8,8 @@ prepared. The four decisions that came with the reversal are ratified in
 1. **The repo stays private.** Tag everything, publish nothing.
 2. **Apache-2.0**, in the repo root and all six module roots — `t07`.
 3. **PRs #25–#30 land first.** v0.1.0 ships with AC-53/AC-54, `ProxyOption`
-   forwarding, and the widened conformance suite.
+   forwarding, and the widened conformance suite. All six are merged as of
+   `890f6b1`, so this precondition is met.
 4. **Lockstep versioning** — `core`, `redisstore`, `pgstore`, `mongostore`,
    `etcdstore` all `v0.1.0`. `examples` is never tagged.
 

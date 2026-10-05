@@ -10,7 +10,7 @@ Row 11 is not duplicated — it points here.
 
 ## What is actually stale
 
-Re-checked against `cb1766d`:
+Re-checked against `890f6b1`:
 
 - `README.md:3` — "ported from bucket4j". `CLAUDE.md` and
   `docs/adr/0018-deliberate-deviations-from-bucket4j.md` both say *rewritten*:
@@ -35,7 +35,8 @@ Re-checked against `cb1766d`:
   are unlinked.
 - `README.md:71` — "three backends". Four.
 - `README.md:73-79` — the test block runs `core`, `redisstore`, `pgstore`.
-  Missing `mongostore` and `etcdstore`. Discover the module list from
+  Missing `mongostore` and `etcdstore`, and `README.md:76` still says
+  "in-memory TCK" — `t02` retired that name for `core/storetest`. Discover the module list from
   `go.work` rather than hardcoding a fifth line that rots the next time a
   module is added.
 - `ai-context/README.md:9-11` — "storage providers (local, Redis, Postgres)"

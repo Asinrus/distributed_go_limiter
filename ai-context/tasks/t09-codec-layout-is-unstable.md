@@ -35,15 +35,15 @@ The substance, in the project's own voice — not a legal disclaimer:
 ## Where it goes
 
 The row says `docs/client/*` "each have a 'what is stored' section". **That is
-only half true and the difference matters:** only `docs/client/redis.md:54` and
-`docs/client/etcd.md:41` have `## What is stored`. `docs/client/postgres.md:28`
-and `docs/client/mongodb.md:22` have `## Schema` instead — same role, different
+only half true and the difference matters:** only `docs/client/redis.md:55` and
+`docs/client/etcd.md:42` have `## What is stored`. `docs/client/postgres.md:29`
+and `docs/client/mongodb.md:23` have `## Schema` instead — same role, different
 name, because a row and a document are describable where an opaque blob is not.
 
 So: add the promise to all four, under whichever heading that file already
 uses, and do not rename the headings to match — `## Schema` is the right word
 for a table definition a user has to apply themselves
-(`docs/client/postgres.md:46` "Applying it").
+(`docs/client/postgres.md:47` "Applying it").
 
 Keep it short in each file and do not copy five paragraphs four times. One
 short paragraph per file, phrased the same, is acceptable duplication for
