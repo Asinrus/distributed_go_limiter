@@ -120,3 +120,17 @@ are folded into `ai-context/tasks/next-roadmap.md` row 11 rather than edited
 here. Task files already in `ai-context/done/` keep their `PLANS.md`
 references: they are a record of what was true when the work was gated, and
 `git log -p -- ai-context/PLANS.md` still resolves after the delete.
+
+## Alternative (3) is now in force — its trigger fired
+
+Alternative (3) above (a root `CHANGELOG.md`) was rejected "for now, not
+forever", with the condition named: *revisit if/when a version is actually
+cut*. A v0.1.0 is being tagged
+(`docs/adr/0019-v0-1-0-is-five-lockstep-modules-under-apache-2-0.md`), so the
+condition is met and the file now exists —
+`docs/adr/0020-changelog-starts-at-v0-1-0.md`.
+
+This ADR's "no replacement changelog file" means no replacement *progress
+tracker*, which is what `PLANS.md` was. The four-way split above is unchanged;
+nothing moves back into a single file, and the new file carries only what a
+consumer of a tagged module cannot get anywhere else.
