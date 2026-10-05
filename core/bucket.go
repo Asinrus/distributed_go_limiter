@@ -24,6 +24,15 @@ var (
 	// outage. core does not decide fail-open vs fail-closed; the caller checks
 	// errors.Is(err, ErrStore). Distributed buckets only.
 	ErrStore = errors.New("core: store failure")
+	// ErrReservationNotReleased is folded into a cancelled blocking Consume's
+	// error when the store failed to walk back a reservation made before the
+	// wait was cancelled. Best-effort: core cannot tell "release lost" from
+	// "release applied, reply lost" (a store idempotency problem, deferred to
+	// roadmap row 17). Deliberately does not wrap ErrStore — a departed client
+	// is not an outage (docs/adr/0015-cancellation-is-not-a-store-failure.md),
+	// and folding it into ErrStore would route a cancelled caller into a
+	// fail-open/fail-closed branch meant for backend failures.
+	ErrReservationNotReleased = errors.New("core: reservation could not be released")
 )
 
 // Bucket is the rate-limiter API, implemented identically by the local in-memory
@@ -52,6 +61,9 @@ type Bucket interface {
 // distributed buckets.
 type reserver interface {
 	reserveTokens(ctx context.Context, n, maxWaitNanos int64) (waitNanos int64, ok bool, err error)
+	// releaseTokens refunds a reservation made by reserveTokens but never
+	// consumed, clamped at capacity.
+	releaseTokens(ctx context.Context, n int64) error
 	capacity() int64
 }
 

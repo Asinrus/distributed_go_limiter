@@ -71,10 +71,12 @@ func (s *bucketState) consumeAsMuch(now, limit int64) (consumed int64, modified 
 	return toConsume, true
 }
 
-// availableAt refills to now and returns the token count.
+// availableAt refills to now and returns the token count, clamped at zero: a
+// reservation (see reserve) can drive currentSize negative internally, but no
+// read ever exposes that — a token count is a count (docs/adr/0018).
 func (s *bucketState) availableAt(now int64) int64 {
 	s.refill(now)
-	return s.currentSize
+	return max0(s.currentSize)
 }
 
 // reserve consumes n tokens (allowing the count to go negative — a reservation)
@@ -89,4 +91,17 @@ func (s *bucketState) reserve(now, n, maxWaitNanos int64) (waitNanos int64, ok, 
 	}
 	s.currentSize -= n // may go negative; future refills repay the reservation
 	return delay, true, true
+}
+
+// release restores n tokens to a reservation made by reserve but never consumed
+// (a blocking Consume cancelled mid-wait), clamped at capacity: refills that ran
+// while the caller waited must not let the refund inflate the bucket above what
+// it could ever hold. Always modifies.
+func (s *bucketState) release(now, n int64) (modified bool) {
+	s.refill(now)
+	s.currentSize += n
+	if s.currentSize > s.bw.capacity {
+		s.currentSize = s.bw.capacity
+	}
+	return true
 }
