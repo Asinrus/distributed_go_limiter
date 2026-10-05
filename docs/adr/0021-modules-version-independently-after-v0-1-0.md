@@ -61,10 +61,18 @@ So state the guarantee as what it is:
 - **A store's own `go.mod` names the `core` it was tested against.** That one
   pair is the pair with a test result behind it — `redisstore/go.mod`'s
   `require` line is the answer to "which `core`?", in one file, not five.
-- **Any pair is checkable, not guessable**: `cd <store> && GOWORK=off go test
-  ./...` resolves whatever `core` the build selects and runs the shared
-  conformance suite (`core/storetest`) against a real container of that
-  store's vendor. The suite is the executable form of the acceptance criteria,
+- **Any pair is checkable, not guessable**: from a module outside this repo,
+  `require` the store at its version and `go test <store import path>` — the
+  build then selects `core` from the store's own `go.mod`, or from whatever
+  the consumer bumps it to, and runs the shared conformance suite
+  (`core/storetest`) against a real container of that store's vendor.
+  **Correction**, from `docs/adr/0022-replace-directives-are-not-redundant.md`:
+  this bullet originally named `cd <store> && GOWORK=off go test ./...` as the
+  command. That one resolves `core` through the store's `replace` directive to
+  the on-disk `core/`, whatever the `require` line says, so it only ever
+  checks the pair (store@working-tree, core@working-tree). It is the right
+  command for developing a pair and the wrong one for certifying a released
+  one. The suite is the executable form of the acceptance criteria,
   it ships inside `core`, and it exercises more of `core` than the seven
   symbols do (`NewConfig`, `NewBandwidth`, `ErrInvalidConfig`, `storetest.Run`
   — the store *test* blast radius, wider than the consumer one). A pair that
