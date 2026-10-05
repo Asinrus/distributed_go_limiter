@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/asinrus/distributed_go_limiter/core"
-	"github.com/asinrus/distributed_go_limiter/core/tck"
+	"github.com/asinrus/distributed_go_limiter/core/storetest"
 	"github.com/asinrus/distributed_go_limiter/redisstore"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
@@ -37,7 +37,7 @@ func startRedis(t *testing.T) *redis.Client {
 // AC-41..44 on real Redis — the same suite the in-memory and Postgres backends run.
 func TestRedisConformance(t *testing.T) {
 	rdb := startRedis(t)
-	tck.Run(t, func() *core.ProxyManager {
+	storetest.Run(t, func() *core.ProxyManager {
 		return redisstore.NewProxyManager(rdb)
 	})
 }

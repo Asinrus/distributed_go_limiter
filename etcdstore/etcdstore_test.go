@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/asinrus/distributed_go_limiter/core"
-	"github.com/asinrus/distributed_go_limiter/core/tck"
+	"github.com/asinrus/distributed_go_limiter/core/storetest"
 	"github.com/asinrus/distributed_go_limiter/etcdstore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,7 +20,7 @@ import (
 
 // etcdCli is shared by every test in this file: one container for the whole
 // package rather than one per test. Tests stay isolated by using distinct
-// keys (core/tck generates its own; the rest use fixed, non-overlapping
+// keys (core/storetest generates its own; the rest use fixed, non-overlapping
 // names), so a shared keyspace never leaks state between tests.
 var etcdCli *clientv3.Client
 
@@ -99,7 +99,7 @@ func startEtcd(t *testing.T) *clientv3.Client {
 // backends run.
 func TestEtcdConformance(t *testing.T) {
 	cli := startEtcd(t)
-	tck.Run(t, func() *core.ProxyManager {
+	storetest.Run(t, func() *core.ProxyManager {
 		return etcdstore.NewProxyManager(cli)
 	})
 }

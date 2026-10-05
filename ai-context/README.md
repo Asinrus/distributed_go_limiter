@@ -8,7 +8,7 @@ decisions) — see below for why that replaced the old local-only `docs/internal
 A distributed **token-bucket** rate limiter (port of bucket4j). `core` owns the
 algorithm + `Bucket` API; storage providers (local, Redis, Postgres) implement a
 tiny `Store`. **Primary goal: swap the provider without changing rate-limiting
-logic** — the same conformance suite (`core/tck`) passes against all three.
+logic** — the same conformance suite (`core/storetest`) passes against all three.
 
 ## What lives where
 | Path | Contents |

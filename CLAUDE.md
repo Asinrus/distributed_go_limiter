@@ -55,7 +55,7 @@ Root is a `go.work` workspace, **not** a module — build/test per module.
   - `proxymanager.go` — `ProxyManager` (same concrete type for every backend).
   - `codec.go` — deterministic state ⇄ []byte (for CAS byte-equality).
   - `memstore.go` — in-memory `CASStore` + `NewInMemoryProxyManager` (reference impl).
-  - `tck/` — shared conformance suite (stdlib `testing` only, no deps). Every backend
+  - `storetest/` — shared conformance suite (stdlib `testing` only, no deps). Every backend
     runs the SAME suite; this is how provider-swap (AC-46) is proven.
 - `redisstore/` (package `redisstore`) — `CASStore` via Lua compare-and-swap + `SET NX`.
 - `pgstore/` (package `pgstore`) — `LockStore` via `SELECT … FOR UPDATE`.
@@ -74,7 +74,7 @@ Root is a `go.work` workspace, **not** a module — build/test per module.
 ## Conventions
 - **TDD, tests first.** The acceptance criteria (in `ai-context/`) are the contract;
   each criterion has a stable ID (AC-11 … AC-46) referenced from the test name
-  (`TestAC12_...`). The shared `core/tck` suite is their executable form.
+  (`TestAC12_...`). The shared `core/storetest` suite is their executable form.
 - **Comments earn their place.** Godoc on every exported symbol, plus comments that
   explain a *why* the code cannot. No restating the code, no tutorial narrative.
   A deliberate trade-off gets a comment naming its limit and what would justify
@@ -82,7 +82,7 @@ Root is a `go.work` workspace, **not** a module — build/test per module.
 - **v1 = single bandwidth per bucket.** Deferred: multi-bandwidth, async, verbose
   diagnostics, optimization/batching, config replacement + versioning, grid providers.
 - New distributed backend = implement `core.CASStore` **or** `core.LockStore`, then
-  `core.NewCASProxyManager` / `core.NewLockProxyManager`, then run `tck.Run` against it.
+  `core.NewCASProxyManager` / `core.NewLockProxyManager`, then run `storetest.Run` against it.
 - Time source: local buckets use a monotonic clock; distributed use wall-clock epoch
   (shared across nodes). Both injectable via `WithClock` for tests.
 
@@ -97,7 +97,7 @@ module's dependencies force, so it moves only when an upgrade forces it. See
 investigator — the block below is what it does, and the fallback.
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH" GOTOOLCHAIN=local   # Go is userspace, no system install
-cd core && go test -race ./...        # algorithm + local + blocking + in-memory TCK (no container)
+cd core && go test -race ./...        # algorithm + local + blocking + in-memory storetest (no container)
 cd ../redisstore && go test ./...     # testcontainers Redis
 cd ../pgstore && go test ./...        # testcontainers Postgres
 ```

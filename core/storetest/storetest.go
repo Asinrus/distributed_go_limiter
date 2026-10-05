@@ -1,9 +1,14 @@
-// Package tck is the shared conformance suite for distributed backends. Every
-// provider (in-memory, Redis, Postgres) runs the SAME suite against a
-// *core.ProxyManager — this is how the provider-swap goal (AC-46) is verified:
-// one test body, only the constructor differs. Uses the stdlib testing package
-// only, so importing it adds no external dependency to core.
-package tck
+// Package storetest is the shared conformance suite for distributed backends.
+// Every provider (in-memory, Redis, Postgres, MongoDB, etcd) runs the SAME
+// suite against a *core.ProxyManager — this is how the provider-swap goal
+// (AC-46) is verified: one test body, only the constructor differs.
+//
+// It is a normal (non-_test.go) package, not a _test.go file, because Go
+// cannot share test code across module boundaries and each backend lives in
+// its own module. It uses only core's exported API, since what it proves is
+// a claim about the public surface. Uses the stdlib testing package only, so
+// importing it adds no external dependency to core.
+package storetest
 
 import (
 	"context"

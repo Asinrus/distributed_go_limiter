@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/asinrus/distributed_go_limiter/core"
-	"github.com/asinrus/distributed_go_limiter/core/tck"
+	"github.com/asinrus/distributed_go_limiter/core/storetest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -13,7 +13,7 @@ import (
 // AC-46: the in-memory provider passes the full conformance suite — the same suite
 // the Redis and Postgres backends run. Only the constructor differs.
 func TestInMemoryConformance(t *testing.T) {
-	tck.Run(t, func() *core.ProxyManager {
+	storetest.Run(t, func() *core.ProxyManager {
 		return core.NewInMemoryProxyManager()
 	})
 }
