@@ -1,9 +1,10 @@
 # Changelog
 
-All five library modules (`core`, `redisstore`, `pgstore`, `mongostore`,
-`etcdstore`) are versioned in lockstep — one entry, one number, applies to
-all of them together. `examples` is not tagged. See
-`docs/adr/0019-v0-1-0-is-five-lockstep-modules-under-apache-2-0.md`.
+The five library modules (`core`, `redisstore`, `pgstore`, `mongostore`,
+`etcdstore`) all start at `v0.1.0` and are versioned independently from there
+— each is tagged when its own code changes, and an entry names the module and
+version it lands in when that is not obvious. `examples` is not tagged. See
+`docs/adr/0021-modules-version-independently-after-v0-1-0.md`.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning:
 [Semantic Versioning](https://semver.org/).
