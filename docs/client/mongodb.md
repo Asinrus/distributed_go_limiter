@@ -34,6 +34,14 @@ provides only the conditional replace (`ReplaceOne` with a filter on `_id`
 and, for a CAS, the previous `state`). `expiresAt` is absent, not null, when the document has
 no expiry.
 
+This layout is a private wire format between this library and itself, not a
+public interface, and it will change before v1.0 — multi-bandwidth needs N
+states where there is now one. The version byte makes that safe: `decodeState`
+rejects a byte count or version it doesn't recognize rather than misreading it,
+so a mixed-version fleet fails loudly on the affected documents. Don't parse
+`state` or migrate it by hand; let the documents drain or expire across an
+upgrade that changes the format.
+
 ### Applying it
 
 ```go
