@@ -14,8 +14,9 @@ the ADR set does not contradict itself.
 ## In scope
 
 - Root `CHANGELOG.md`, Keep a Changelog format, semver, with `Unreleased` and
-  `0.1.0` sections. One file for all five modules, because they share one
-  version (ADR 0019).
+  `0.1.0` sections. One file for all five modules, because this is one repo
+  with one shared contract — **not** because they share one number
+  (`docs/adr/0021-modules-version-independently-after-v0-1-0.md`).
 - The `0.1.0` entry. It is the first release, so it is a *what this is* entry,
   not a diff against nothing: the `Bucket` API, single bandwidth per bucket,
   blocking consume, the four backends, the shared conformance suite as the
@@ -23,9 +24,13 @@ the ADR set does not contradict itself.
 - A line in `0.1.0` for the thing a consumer must know before they depend on
   it: the stored byte layout is not part of the API and changes before v1.0.
   Reuse `t09`'s wording; do not write a third phrasing of it.
-- A one-line note at the top of the file saying what versioning scheme is in
-  force (all five modules move together, `examples` is not published) with a
-  pointer to ADR 0019, so nobody has to infer lockstep from the entries.
+- A short note at the top of the file saying what versioning scheme is in
+  force, pointing at
+  `docs/adr/0021-modules-version-independently-after-v0-1-0.md`: the five
+  library modules all start at `v0.1.0` and are tagged independently after
+  that, `examples` is not published, and an entry names the module and version
+  it lands in when that is not obvious. Nobody should have to infer the scheme
+  from the entries, and they must not infer lockstep.
 - The `0.1.0` date is the date the tags are cut — `publish-v0.1.0.md` step 5.
   Leave it as the literal string `UNRELEASED` until then rather than guessing
   a date that will be wrong.

@@ -5,7 +5,9 @@ without a recognisable license is a tag that has to be superseded.
 
 **Ruled in** `docs/adr/0019-v0-1-0-is-five-lockstep-modules-under-apache-2-0.md`.
 The license choice and the NOTICE question are settled there; do not re-open
-them in the PR.
+them in the PR. (0019's lockstep section is superseded by
+`docs/adr/0021-modules-version-independently-after-v0-1-0.md` — the license and
+NOTICE rulings this ticket implements are untouched by that.)
 
 ## Why seven copies
 

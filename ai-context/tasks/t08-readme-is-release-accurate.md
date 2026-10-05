@@ -60,10 +60,15 @@ Re-checked against `890f6b1`:
 ## Also worth saying, since this is the release README
 
 - A `## Status` line that says what v0.1.0 *is*: four backends, single
-  bandwidth per bucket, blocking consume, lockstep-versioned at `v0.1.0`
-  (ADR 0019), **pre-v1.0 so the compatibility promise is weaker than Go's
-  normal one** — `t09` owns the exact wording of the storage-format half of
-  that; do not invent a second phrasing here, link or reuse it.
+  bandwidth per bucket, blocking consume, all five modules tagged `v0.1.0` and
+  **versioned independently from there**
+  (`docs/adr/0021-modules-version-independently-after-v0-1-0.md`), **pre-v1.0
+  so the compatibility promise is weaker than Go's normal one** — `t09` owns
+  the exact wording of the storage-format half of that; do not invent a second
+  phrasing here, link or reuse it. Do not say "lockstep" — ADR 0019's lockstep
+  section is superseded. One sentence is enough on the versioning: each module
+  is tagged when its own code changes, and the `core` version a backend was
+  tested against is the `require` line in that backend's `go.mod`.
 - The repo is private at v0.1.0, so no pkg.go.dev badge and no `go get`
   instructions that will 404 for a reader without access.
 

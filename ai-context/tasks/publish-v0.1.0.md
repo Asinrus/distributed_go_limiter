@@ -10,8 +10,13 @@ prepared. The four decisions that came with the reversal are ratified in
 3. **PRs #25–#30 land first.** v0.1.0 ships with AC-53/AC-54, `ProxyOption`
    forwarding, and the widened conformance suite. All six are merged as of
    `890f6b1`, so this precondition is met.
-4. **Lockstep versioning** — `core`, `redisstore`, `pgstore`, `mongostore`,
-   `etcdstore` all `v0.1.0`. `examples` is never tagged.
+4. **All five modules start at `v0.1.0`** — `core`, `redisstore`, `pgstore`,
+   `mongostore`, `etcdstore`. `examples` is never tagged. 0019's "and move
+   together from here" is **reversed** by
+   `docs/adr/0021-modules-version-independently-after-v0-1-0.md`: after this
+   release each module is tagged on its own, when its own code changes. That
+   changes nothing in the steps below — the first release still puts the same
+   number on all five — but it is why no step here promises future lockstep.
 
 **For:** Dev, then the tester. This file is the **tagging** ticket: blocker (c)
 and the tag sequence. The release's other work has its own tickets — `t07`
@@ -113,8 +118,9 @@ module path change is a different, much larger ticket.
   before that. Separate, owner-driven.
 - Release automation and CI workflow changes (`.github/workflows/` is not this
   ticket's).
-- What a version means beyond this first tag — ruled in ADR 0019 (lockstep)
-  and ADR 0020 (changelog), not re-opened here.
+- What a version means beyond this first tag — ruled in ADR 0021 (independent
+  per-module versioning and the `core`-interface compatibility contract) and
+  ADR 0020 (changelog), not re-opened here.
 - Any `v0.2.0` planning. Row 17.
 
 **Done looks like:** no `replace` of a repo-local module anywhere, five

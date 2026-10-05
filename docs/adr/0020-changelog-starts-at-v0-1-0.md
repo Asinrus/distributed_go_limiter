@@ -51,6 +51,14 @@ reading are the ones that say "this breaks your call site", and no commit
 message in this repo was written to that spec. Hand-written, four lines a
 release, is cheaper than the tooling plus the convention plus the enforcement.
 
-Rejected: **per-module changelogs** (five files). Lockstep versioning is what
-makes one file correct; five files would re-create the compatibility matrix
-ADR 0019 collapsed.
+Rejected: **per-module changelogs** (five files). One repo with one shared
+contract is what makes one file correct; five files is five places to maintain
+for four backends that change rarely and only ever against the same handful of
+`core` symbols.
+
+Both references to lockstep above are superseded by
+`docs/adr/0021-modules-version-independently-after-v0-1-0.md`: the modules
+version independently after `v0.1.0`, so "one number" is no longer the reason
+one file is right. The decision — a root `CHANGELOG.md`, Keep a Changelog,
+starting at v0.1.0 — is unaffected; entries now name the module and version a
+change lands in.

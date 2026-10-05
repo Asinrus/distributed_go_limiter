@@ -48,8 +48,8 @@ of them change rows here:
 longer "a portfolio implementation with no near-term release". Four decisions
 came with the reversal, ratified in
 `docs/adr/0019-v0-1-0-is-five-lockstep-modules-under-apache-2-0.md`: Apache-2.0
-in all seven roots, lockstep `v0.1.0` across the five library modules
-(`examples` untagged), PRs #25–#30 land first, and the repo **stays private** —
+in all seven roots, `v0.1.0` across the five library modules (`examples`
+untagged), PRs #25–#30 land first, and the repo **stays private** —
 so v0.1.0 is *tagged but unpublished* and pkg.go.dev indexes nothing until
 visibility flips. What this does to the ranking:
 
@@ -65,6 +65,18 @@ visibility flips. What this does to the ranking:
 - Nothing else is re-ranked. The release does not wait on rows 10, 13, 14, 19,
   20 or 23, and shipping 0.1.0 with known tier-2 defects recorded here is the
   point of calling it 0.1.0.
+
+**0019's lockstep ruling is itself reversed**
+(`docs/adr/0021-modules-version-independently-after-v0-1-0.md`): the five
+modules still all start at `v0.1.0`, then version independently. The coupling
+was measured — every store uses the same seven `core` symbols and nothing
+else, all interfaces or constructors, and the v0.2 codec break touches none of
+them — so a store needs no release when `core`'s internals move. The contract
+that replaces the shared number is `core`'s exported interfaces, with a
+store's own `go.mod` naming the `core` it was tested against and
+`GOWORK=off go test ./...` as the runnable check for any other pair. No row is
+re-ranked by this; `t08` and `t10` have reworded asks, and row 15's steps are
+unchanged.
 
 The `path:line` references are the evidence for each row. Rows 11, 15, 18, 24,
 25 and 26 were re-verified against `890f6b1` with the release scoping, and rows
