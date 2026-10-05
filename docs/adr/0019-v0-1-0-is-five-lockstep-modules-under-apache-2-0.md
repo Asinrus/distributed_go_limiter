@@ -52,7 +52,7 @@ Rejected: **no `NOTICE` at all.** Defensible, since the README says it — but
 the README is the file most likely to be rewritten by someone who does not
 know the sentence was load-bearing.
 
-## Lockstep versioning: one number across five modules
+## Lockstep versioning: one number across five modules — superseded, see below
 
 `core`, `redisstore`, `pgstore`, `mongostore` and `etcdstore` are all tagged
 `v0.1.0`, and move together from here. `examples` is never tagged — it is a
@@ -79,6 +79,17 @@ above. Rejected: **a single root module** instead of five, which would remove
 the question entirely but also remove the property the library is built to
 demonstrate: that a consumer takes `core` plus the one backend it uses and no
 vendor dependency it does not.
+
+**This section is superseded by
+`docs/adr/0021-modules-version-independently-after-v0-1-0.md`.** The owner
+reversed it: all five modules still *start* at `v0.1.0`, and version
+independently from there. The claim above that "the same number everywhere
+means the combination was tested together" is the part that did not survive —
+nothing makes a consumer pin all five at one number, and Go's minimal version
+selection will happily put `core v0.2.0` under a `redisstore` tested against
+`v0.1.0`. 0021 replaces the convention with the contract it was standing in
+for. Everything else in this ADR stands, including `examples` never being
+tagged.
 
 ## Tagged, not published — blocker (a) is deferred, not resolved
 
