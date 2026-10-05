@@ -1,0 +1,8 @@
+distributed_go_limiter
+Copyright 2026 asinrus
+
+This product rewrites the token-bucket semantics of bucket4j
+(https://github.com/bucket4j/bucket4j) for Go; no bucket4j source was copied.
+bucket4j is licensed under the Apache License, Version 2.0, Copyright its
+authors. See docs/adr/0018-deliberate-deviations-from-bucket4j.md for the
+points where this implementation deliberately differs.
