@@ -52,6 +52,14 @@ $ etcdctl get --prefix ""
 $ etcdctl lease timetolive $(etcdctl get 127.0.0.1 -w json | jq -r '.kvs[0].lease')
 ```
 
+This layout is a private wire format between this library and itself, not a
+public interface, and it will change before v1.0 — multi-bandwidth needs N
+states where there is now one. The version byte makes that safe: `decodeState`
+rejects a byte count or version it doesn't recognize rather than misreading it,
+so a mixed-version fleet fails loudly on the affected keys. Don't parse these
+bytes or migrate them by hand; let the keys drain or expire across an upgrade
+that changes the format.
+
 ## Errors
 
 Any etcd failure — I/O, timeout, cancellation — comes back wrapping `core.ErrStore`, with the

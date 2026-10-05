@@ -40,7 +40,10 @@ func TestCodecRoundTrip(t *testing.T) {
 // This pins the layout to a literal instead, in both directions.
 //
 // If this test fails, the format changed: bump stateVersion and handle the old
-// one in decodeState — do not just update the literal.
+// one in decodeState — do not just update the literal. This is the expected
+// outcome of multi-bandwidth (v0.2, ADR 0001): the docs/client/*.md "what is
+// stored"/"schema" sections already tell users not to parse or hand-migrate
+// these bytes, so update the literal here and leave that promise as is.
 func TestCodecWireFormatIsFrozen(t *testing.T) {
 	bw := NewBandwidth(100).RefillGreedy(10, time.Second)
 

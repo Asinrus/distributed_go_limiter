@@ -44,6 +44,14 @@ Indexes:
 `state` is 25 bytes — a version byte plus three big-endian int64s. The token maths runs in
 `core`; Postgres provides only the row lock (`SELECT … FOR UPDATE`).
 
+This layout is a private wire format between this library and itself, not a
+public interface, and it will change before v1.0 — multi-bandwidth needs N
+states where there is now one. The version byte makes that safe: `decodeState`
+rejects a byte count or version it doesn't recognize rather than misreading it,
+so a mixed-version fleet fails loudly on the affected rows. Don't parse `state`
+or migrate it by hand; let the rows drain or expire across an upgrade that
+changes the format.
+
 ### Applying it
 
 Two supported paths. Pick one — they produce the same schema.
