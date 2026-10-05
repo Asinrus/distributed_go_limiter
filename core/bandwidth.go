@@ -1,7 +1,3 @@
-// Package core defines the token-bucket API and algorithm for a distributed
-// rate limiter. The token math lives here once; storage providers (local,
-// Redis, Postgres) only supply an atomic Store. core is transport-agnostic —
-// no net/http, no gRPC; an adapter belongs in the caller.
 package core
 
 import "time"
