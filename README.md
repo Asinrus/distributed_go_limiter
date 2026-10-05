@@ -80,8 +80,10 @@ The number tracks the highest floor the dependencies force — see
 
 ## Status
 `v0.1.0`: four backends (Redis, Postgres, MongoDB, etcd) plus the in-memory
-reference, single bandwidth per bucket, blocking consume. The five modules are
-versioned in lockstep (`docs/adr/0019-v0-1-0-is-five-lockstep-modules-under-apache-2-0.md`).
+reference, single bandwidth per bucket, blocking consume. The five modules all start
+at `v0.1.0` and are versioned independently from there; the `core` version a
+backend was tested against is the `require` line in that backend's `go.mod`
+(`docs/adr/0021-modules-version-independently-after-v0-1-0.md`).
 This is pre-v1.0: the Go compatibility promise doesn't bind yet, and the stored
 byte layout is explicitly allowed to change (see each `docs/client/*.md`'s
 "what is stored"/"schema" section). See `ai-context/tasks/next-roadmap.md` for
