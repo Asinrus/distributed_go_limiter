@@ -3,7 +3,7 @@
 ```go
 client, _ := mongo.Connect(ctx, options.Client().ApplyURI(uri))
 coll := client.Database("limiter").Collection("bucket")
-pm := mongostore.NewProxyManager(coll, mongostore.WithTTL(time.Hour))
+pm := mongostore.NewProxyManager(coll, core.WithExpireAfterWrite(time.Hour))
 ```
 
 That is the entire MongoDB-specific surface. Everything after it — `pm.Bucket(key, cfg)`,
@@ -12,10 +12,12 @@ That is the entire MongoDB-specific surface. Everything after it — `pm.Bucket(
 
 ## Options
 
+`NewProxyManager` takes `core.ProxyOption` directly; `mongostore` has no options of its own.
+
 | Option | Default | Effect |
 |---|---|---|
-| `WithTTL(d)` | `0` (no expiry) | Marks state stale after this long. Sugar for `WithProxyOption(core.WithExpireAfterWrite(d))`. See cleanup below. |
-| `WithProxyOption(o)` | — | Forwards a `core.ProxyOption` (`core.WithClock`, `core.WithMaxCASRetries`, `core.WithExpireAfterWrite`, …) to the underlying `core.ProxyManager`. |
+| `core.WithExpireAfterWrite(d)` | `0` (no expiry) | Marks state stale after this long. See cleanup below. |
+| `core.WithClock(fn)`, `core.WithMaxCASRetries(n)`, … | — | Any other `core.ProxyOption`. |
 
 There is no collection-name option: `NewProxyManager` takes a `*mongo.Collection`, so the
 collection itself is the namespace, matching `redisstore`'s `redis.Cmdable` shape.
@@ -60,7 +62,7 @@ correctness: every read and write filters on a stored `expiresAt` field, so a st
 reads as "absent" long before the reaper collects it. The TTL index only reclaims storage. See
 `docs/adr/0012-ttl-is-not-a-correctness-mechanism.md`.
 
-Without `WithTTL`, `expiresAt` is never set and no document is ever reclaimed — every client
+Without `core.WithExpireAfterWrite`, `expiresAt` is never set and no document is ever reclaimed — every client
 you ever rate-limited stays in the collection forever, same as Redis without a TTL.
 
 ## Errors

@@ -4,6 +4,11 @@
 // conditional replace keyed by _id. See docs/client/mongodb.md and
 // docs/adr/0012-ttl-is-not-a-correctness-mechanism.md for why expiry is
 // enforced in the query filter rather than left to the TTL index.
+//
+// NewProxyManager takes core.ProxyOption directly because this backend has no
+// store-level settings of its own. A new backend that does (a key prefix, a
+// table name) should follow redisstore, etcdstore and pgstore and define its
+// own Option type.
 package mongostore
 
 import (
@@ -40,13 +45,6 @@ func live(now time.Time) bson.M {
 type Store struct {
 	coll *mongo.Collection
 	now  func() time.Time
-
-	// coreOpts stages core.ProxyOption values (including the TTL translated by
-	// WithTTL) until NewProxyManager forwards them to core.NewCASProxyManager.
-	// It has no effect on a Store built via NewStore directly and used as a
-	// bare core.CASStore — expiry there comes from the ttl core/command.go
-	// passes into CompareAndSwap, not from this field.
-	coreOpts []core.ProxyOption
 }
 
 var _ core.CASStore = (*Store)(nil)
@@ -107,23 +105,6 @@ func (s *Store) Remove(ctx context.Context, key string) error {
 	return nil
 }
 
-// Option configures the MongoDB backend.
-type Option func(*Store)
-
-// WithTTL sets an expire-after-write TTL on bucket state (0 = no expiry). It is
-// sugar for WithProxyOption(core.WithExpireAfterWrite(d)).
-func WithTTL(d time.Duration) Option {
-	return func(s *Store) { s.coreOpts = append(s.coreOpts, core.WithExpireAfterWrite(d)) }
-}
-
-// WithProxyOption forwards a core.ProxyOption — core.WithClock,
-// core.WithMaxCASRetries, core.WithExpireAfterWrite, or any future one — to the
-// underlying core.ProxyManager, so nothing core exposes is unreachable from this
-// constructor.
-func WithProxyOption(o core.ProxyOption) Option {
-	return func(s *Store) { s.coreOpts = append(s.coreOpts, o) }
-}
-
 // IndexModels returns the TTL index used by EnsureIndexes: storage reclamation
 // only, since expiry correctness comes from the query filter in GetState and
 // CompareAndSwap, not from the reaper.
@@ -145,19 +126,16 @@ func EnsureIndexes(ctx context.Context, coll *mongo.Collection) error {
 	return nil
 }
 
-// NewStore returns the raw CASStore. Most callers want NewProxyManager instead.
-func NewStore(coll *mongo.Collection, opts ...Option) *Store {
-	s := &Store{coll: coll, now: time.Now}
-	for _, o := range opts {
-		o(s)
-	}
-	return s
+// NewStore returns the raw CASStore. It takes no options: the TTL and every
+// other core setting live on the ProxyManager (see NewProxyManager).
+func NewStore(coll *mongo.Collection) *Store {
+	return &Store{coll: coll, now: time.Now}
 }
 
 // NewProxyManager builds a distributed ProxyManager backed by MongoDB. Call
 // EnsureIndexes first (or create the index yourself). Calling code uses the
-// returned core.ProxyManager exactly like any other backend.
-func NewProxyManager(coll *mongo.Collection, opts ...Option) *core.ProxyManager {
-	s := NewStore(coll, opts...)
-	return core.NewCASProxyManager(s, s.coreOpts...)
+// returned core.ProxyManager exactly like any other backend. For a TTL pass
+// core.WithExpireAfterWrite.
+func NewProxyManager(coll *mongo.Collection, opts ...core.ProxyOption) *core.ProxyManager {
+	return core.NewCASProxyManager(NewStore(coll), opts...)
 }
