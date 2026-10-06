@@ -49,10 +49,12 @@ func (c *fakeClock) now() int64              { return c.ns.Load() }
 func (c *fakeClock) advance(d time.Duration) { c.ns.Add(int64(d)) }
 
 // Run executes the full conformance suite against the ProxyManager built by
-// factory, which must forward now to the underlying store via
-// core.WithProxyOption(core.WithClock(now)) (every backend's WithProxyOption
-// does this identically — see redisstore.WithProxyOption and siblings). Call
-// it from each backend's test with a container-backed manager.
+// factory, which must forward now to the underlying store as
+// core.WithClock(now). How a backend accepts that differs: mongostore's
+// NewProxyManager takes core.ProxyOption directly, while redisstore, pgstore
+// and etcdstore wrap it in their own WithProxyOption because they also have
+// store-level settings. Call it from each backend's test with a
+// container-backed manager.
 func Run(t *testing.T, factory func(now func() int64) *core.ProxyManager) {
 	t.Helper()
 	t.Run("AC41_KeyIsolation", func(t *testing.T) { testKeyIsolation(t, factory(newFakeClock().now)) })
