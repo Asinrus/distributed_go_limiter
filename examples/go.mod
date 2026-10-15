@@ -3,11 +3,11 @@ module github.com/asinrus/distributed_go_limiter/examples
 go 1.26.0
 
 require (
-	github.com/asinrus/distributed_go_limiter/core v0.0.0
-	github.com/asinrus/distributed_go_limiter/etcdstore v0.0.0
-	github.com/asinrus/distributed_go_limiter/mongostore v0.0.0
-	github.com/asinrus/distributed_go_limiter/pgstore v0.0.0
-	github.com/asinrus/distributed_go_limiter/redisstore v0.0.0
+	github.com/asinrus/distributed_go_limiter/core v0.1.0
+	github.com/asinrus/distributed_go_limiter/etcdstore v0.1.0
+	github.com/asinrus/distributed_go_limiter/mongostore v0.1.0
+	github.com/asinrus/distributed_go_limiter/pgstore v0.1.0
+	github.com/asinrus/distributed_go_limiter/redisstore v0.1.0
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/redis/go-redis/v9 v9.6.3
 	go.etcd.io/etcd/client/v3 v3.5.16
@@ -47,6 +47,7 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 
+// Not redundant: removing this breaks the offline build (docs/adr/0022-replace-directives-are-not-redundant.md).
 replace (
 	github.com/asinrus/distributed_go_limiter/core => ../core
 	github.com/asinrus/distributed_go_limiter/etcdstore => ../etcdstore

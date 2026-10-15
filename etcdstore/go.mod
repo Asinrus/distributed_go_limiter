@@ -2,10 +2,11 @@ module github.com/asinrus/distributed_go_limiter/etcdstore
 
 go 1.26.0
 
+// Not redundant: removing this breaks the offline build (docs/adr/0022-replace-directives-are-not-redundant.md).
 replace github.com/asinrus/distributed_go_limiter/core => ../core
 
 require (
-	github.com/asinrus/distributed_go_limiter/core v0.0.0
+	github.com/asinrus/distributed_go_limiter/core v0.1.0
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.33.0
 	go.etcd.io/etcd/client/v3 v3.5.16

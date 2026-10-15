@@ -3,7 +3,7 @@ module github.com/asinrus/distributed_go_limiter/pgstore
 go 1.25.0
 
 require (
-	github.com/asinrus/distributed_go_limiter/core v0.0.0
+	github.com/asinrus/distributed_go_limiter/core v0.1.0
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.33.0
@@ -64,4 +64,5 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
+// Not redundant: removing this breaks the offline build (docs/adr/0022-replace-directives-are-not-redundant.md).
 replace github.com/asinrus/distributed_go_limiter/core => ../core
