@@ -11,7 +11,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning:
 
 ## Unreleased
 
-## 0.1.0 - UNRELEASED
+## 0.1.0 - 2026-10-15
 
 First release. This repository stays private at this tag — the artefacts are
 tagged and verifiable by the owner, but not yet fetchable or indexed anywhere
