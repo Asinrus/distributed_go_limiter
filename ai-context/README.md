@@ -21,7 +21,7 @@ passes against all five.
 | `docs/client/` | User-facing backend docs (`redis.md`, `postgres.md`, `mongodb.md`, `etcd.md`). |
 | `.claude/agents/` | `architect.md`, `dev.md`, `investigator.md`, `tester.md` — the roles below, in executable form. |
 | `.claude/commands/` | `/verify` — full suite across every workspace module; dispatches the investigator on failure. |
-| `CLAUDE.md` | Code map + build/test commands. **Dev-owned** — it follows the code, so Dev updates it; the Architect opens a task in `ai-context/tasks/` rather than editing it silently. |
+| `CLAUDE.md` | Code map + build/test commands + the ratified vocabulary and conventions. **Ownership is split by section, because the file is two documents:** Layout, Go version and Build & test follow the code, so **Dev** updates them in the same change that moves the code; What this is, Vocabulary, Process & context and Conventions record ratified decisions, so **the Architect** owns them. The single-owner rule here previously named Dev for all of it and was overridden three times in a row — the practice was right and the rule was wrong. Either role fixes a plainly false claim in the other's section rather than leaving it to rot. |
 
 `docs/internal/` no longer exists — it was gitignored, local-only, and absent
 from this workspace entirely. Its role is split between `docs/adr/`
@@ -34,8 +34,8 @@ authoritative definition** — read those, not a paraphrase here.
 
 | Role | Model | Definition | Owns |
 |------|-------|-----------|------|
-| Architect | opus | `.claude/agents/architect.md` | `docs/adr/`, `ai-context/tasks/` (creates) |
-| Dev | sonnet | `.claude/agents/dev.md` | Go source, tests, `CLAUDE.md` |
+| Architect | opus | `.claude/agents/architect.md` | `docs/adr/`, `ai-context/tasks/` (creates), `CLAUDE.md`'s convention sections |
+| Dev | sonnet | `.claude/agents/dev.md` | Go source, tests, `CLAUDE.md`'s code-map sections |
 | Investigator | sonnet | `.claude/agents/investigator.md` | Writes findings into the task file it's given |
 | Tester | haiku | `.claude/agents/tester.md` | Moves `ai-context/tasks/*` → `ai-context/done/*` — the only role that does |
 
@@ -53,8 +53,9 @@ remembering to start it.
 ## Key decisions (v1)
 - **Single bandwidth per bucket.** Deferred: multi-bandwidth, async API, verbose
   diagnostics, optimization/batching, config replacement + versioning, grid providers.
-- `Bucket` methods take `ctx` and return `error` (local ignores both; distributed
-  surfaces I/O + cancellation) — calling code stays identical across backends.
+- `Bucket` methods take `ctx` and return `error` (local ignores ctx and returns
+  only argument/config errors; distributed surfaces I/O + cancellation) — calling
+  code stays identical across backends.
 - Config is supplied at bucket-build time and **not stored**; nodes sharing a key
   must use matching config.
 - **`core` is protocol-agnostic.** No HTTP (or gRPC, or any transport) inside the
