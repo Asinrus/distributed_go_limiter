@@ -38,7 +38,7 @@ func main() {
 		log.Fatalf("mongodb indexes: %v", err)
 	}
 
-	pm := mongostore.NewProxyManager(coll, mongostore.WithTTL(time.Hour))
+	pm := mongostore.NewProxyManager(coll, core.WithExpireAfterWrite(time.Hour))
 
 	// One token back every 12s, so the limit is reachable by hand.
 	limit := core.NewConfig(core.NewBandwidth(5).RefillGreedy(5, time.Minute))

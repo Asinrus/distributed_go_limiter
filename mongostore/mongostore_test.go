@@ -99,7 +99,7 @@ func startMongo(t *testing.T) *mongo.Collection {
 func TestMongoConformance(t *testing.T) {
 	coll := startMongo(t)
 	storetest.Run(t, func(now func() int64) *core.ProxyManager {
-		return mongostore.NewProxyManager(coll, mongostore.WithProxyOption(core.WithClock(now)))
+		return mongostore.NewProxyManager(coll, core.WithClock(now))
 	})
 }
 
@@ -108,7 +108,7 @@ func TestMongoConformance(t *testing.T) {
 func TestMongoExpiration(t *testing.T) {
 	coll := startMongo(t)
 	ctx := context.Background()
-	pm := mongostore.NewProxyManager(coll, mongostore.WithTTL(1*time.Second))
+	pm := mongostore.NewProxyManager(coll, core.WithExpireAfterWrite(1*time.Second))
 	cfg := core.NewConfig(core.NewBandwidth(10).RefillGreedy(1, time.Hour))
 
 	b, err := pm.Bucket("exp", cfg)
@@ -134,7 +134,7 @@ func TestMongoExpiration(t *testing.T) {
 func TestMongoCreateOverwritesUnreapedExpiredDoc(t *testing.T) {
 	coll := startMongo(t)
 	ctx := context.Background()
-	pm := mongostore.NewProxyManager(coll, mongostore.WithTTL(1*time.Second))
+	pm := mongostore.NewProxyManager(coll, core.WithExpireAfterWrite(1*time.Second))
 	cfg := core.NewConfig(core.NewBandwidth(10).RefillGreedy(1, time.Hour))
 
 	b, err := pm.Bucket("stale", cfg)
@@ -160,14 +160,14 @@ func TestMongoCreateOverwritesUnreapedExpiredDoc(t *testing.T) {
 	assert.Equal(t, int64(7), av)
 }
 
-// core.WithClock reaches the MongoDB constructor via WithProxyOption, so a
+// core.WithClock reaches the MongoDB constructor as a core.ProxyOption, so a
 // refill can be driven against a real container with no wall-clock sleep —
 // the capability T05 is built on.
 func TestMongoWithClockDrivesRefillWithNoSleep(t *testing.T) {
 	coll := startMongo(t)
 	ctx := context.Background()
 	clk := newFakeClock()
-	pm := mongostore.NewProxyManager(coll, mongostore.WithProxyOption(core.WithClock(clk.now)))
+	pm := mongostore.NewProxyManager(coll, core.WithClock(clk.now))
 	cfg := core.NewConfig(core.NewBandwidth(10).RefillGreedy(10, time.Second))
 
 	b, err := pm.Bucket("clock-refill", cfg)
@@ -193,7 +193,7 @@ func TestMongoWithClockDrivesRefillWithNoSleep(t *testing.T) {
 // — proof the plumbing is generic, not special-cased for the clock.
 func TestMongoMaxCASRetriesReachableAndValidated(t *testing.T) {
 	coll := startMongo(t)
-	pm := mongostore.NewProxyManager(coll, mongostore.WithProxyOption(core.WithMaxCASRetries(0)))
+	pm := mongostore.NewProxyManager(coll, core.WithMaxCASRetries(0))
 	cfg := core.NewConfig(core.NewBandwidth(10).RefillGreedy(1, time.Hour))
 
 	b, err := pm.Bucket("max-retries", cfg)
