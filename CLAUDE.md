@@ -97,10 +97,18 @@ Root is a `go.work` workspace, **not** a module — build/test per module.
   injects through the unexported `newLocalBucketClock`, for tests in `core` only.
 
 ## Go version
-One version, `go 1.25.0`, for every `go.mod` and `go.work` — no per-module
-exception, no `toolchain` directive. The number tracks the highest floor any
-module's dependencies force, so it moves only when an upgrade forces it. See
-`docs/adr/0017-one-go-directive-tracks-the-dependency-floor.md`.
+The `go` directive is per module: each `go.mod` states the floor its own
+dependencies force and nothing higher (`core`, `redisstore`, `pgstore`,
+`mongostore` `1.25.0`; `etcdstore`, `examples` `1.26.0`). `go.work` is the highest
+member. No `toolchain` directive. The floor is derived, never chosen: raise a
+module only when a named dependency version forces it. Measure with `GOWORK=off`,
+and never `go mod tidy` to find out. See `docs/adr/0024-go-directive-is-per-module.md`
+(supersedes 0017).
+
+The CI `setup-go` pin is a separate knob: the newest patch of the oldest Go line
+still receiving security fixes, never below the highest directive. Do not move
+it with a directive or the reverse. See
+`docs/adr/0023-ci-toolchain-pin-tracks-a-supported-release-line.md`.
 
 ## Build & test
 `/verify` discovers the workspace modules, runs the suite, and routes failures to the

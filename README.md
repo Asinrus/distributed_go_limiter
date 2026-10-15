@@ -74,9 +74,14 @@ replica keeps its own count and doubling the replicas silently doubles the real 
 - `CLAUDE.md` — code map + build/test commands.
 
 ## Go version
-Built and tested at `go 1.25.0`, same version across every module and `go.work`.
-The number tracks the highest floor the dependencies force — see
-[`docs/adr/0017-one-go-directive-tracks-the-dependency-floor.md`](docs/adr/0017-one-go-directive-tracks-the-dependency-floor.md).
+Each module declares the floor its own dependencies force:
+
+| module | `go` |
+|---|---|
+| `core`, `redisstore`, `pgstore`, `mongostore` | `1.25.0` |
+| `etcdstore` | `1.26.0` |
+
+See [`docs/adr/0024-go-directive-is-per-module.md`](docs/adr/0024-go-directive-is-per-module.md).
 
 ## Status
 `v0.1.0`: four backends (Redis, Postgres, MongoDB, etcd) plus the in-memory
