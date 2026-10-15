@@ -7,9 +7,10 @@ A distributed **token-bucket** rate limiter for Go, rewritten from
 [bucket4j](https://github.com/bucket4j/bucket4j) — its semantics carried across,
 not its code transliterated, so a difference from the Java is not by itself a bug
 (see `docs/adr/0018-deliberate-deviations-from-bucket4j.md`). Buckets share
-state through a pluggable storage provider. **Primary design goal: swap the provider
-(local ↔ Redis ↔ Postgres) without changing any rate-limiting logic** — the
-`core.Bucket` API and all calling code stay identical; only the constructor differs.
+state through a pluggable store. **Primary design goal: swap the store
+(local ↔ Redis ↔ Postgres ↔ MongoDB ↔ etcd) without changing any rate-limiting
+logic** — the `core.Bucket` API and all calling code stay identical; only the
+constructor differs.
 
 Key idea inherited from bucket4j: **the token math never runs in the store.** The
 store is a dumb byte-blob KV with one concurrency primitive (compare-and-swap, or a
@@ -47,10 +48,12 @@ Root is a `go.work` workspace, **not** a module — build/test per module.
     intervally boundaries. Reduced from bucket4j's `BucketState64BitsInteger`.
   - `ops.go` — operations on state (tryConsume/estimate/reserve/…) shared by the
     local and distributed paths so the math is written once.
-  - `bucket.go` — the `Bucket` interface (ctx + error; local ignores both).
+  - `bucket.go` — the `Bucket` interface (ctx + error; `LocalBucket` ignores ctx
+    and returns only argument/config errors, never `ErrStore`).
   - `local.go` — `LocalBucket` (mutex, in-memory hot path).
   - `blocking.go` — `BlockingBucket.Consume` (reservation-based wait, no busy-spin).
-  - `store.go` — provider contracts: `CASStore` (Redis/in-memory) and `LockStore` (Postgres).
+  - `store.go` — the two store contracts: `CASStore` (Redis, MongoDB, etcd,
+    in-memory) and `LockStore` (Postgres).
   - `command.go` — the read-modify-write executor (CAS retry loop / lock callback).
   - `proxymanager.go` — `ProxyManager` (same concrete type for every backend).
   - `codec.go` — deterministic state ⇄ []byte (for CAS byte-equality).
@@ -64,8 +67,8 @@ Root is a `go.work` workspace, **not** a module — build/test per module.
 - `mongostore/` (package `mongostore`) — `CASStore` via a conditional `ReplaceOne`.
 - `etcdstore/` (package `etcdstore`) — `CASStore` via `Txn` comparing on
   `clientv3.Value`; expiry rides an etcd lease.
-- `examples/` — two `main` packages (`examples/redis/`, `examples/postgres/`), each
-  with a `docker-compose.yml`. **The `net/http` lives here, in the demo programs —
+- `examples/` — one `main` package per backend (`examples/redis/`, `postgres/`,
+  `mongodb/`, `etcd/`), each with a `docker-compose.yml`. **The `net/http` lives here, in the demo programs —
   not in `core`.** Only backend-specific line is the `*core.ProxyManager` constructor;
   everything after that (`pm.Bucket`, `TryConsume`) is identical. Deliberately
   un-abstracted — no shared package between them — so the library call is never one
@@ -73,9 +76,10 @@ Root is a `go.work` workspace, **not** a module — build/test per module.
 
 ## Conventions
 - **TDD, tests first.** The acceptance criteria are the contract; each has a
-  stable ID (AC-11 … AC-46) referenced from the test name (`TestAC12_...`). There
-  is no standing AC registry — `grep -rn 'AC-'` is the index — and the shared
-  `core/storetest` suite is their executable form.
+  stable ID (`AC-11` upward; `AC-61` is the highest minted) referenced from the
+  test name (`TestAC12_...`). There is no standing AC registry —
+  `grep -rn 'AC-'` is the index — and the shared `core/storetest` suite is their
+  executable form.
 - **Comments earn their place.** Godoc on every exported symbol, plus comments that
   explain a *why* the code cannot. No restating the code, no tutorial narrative.
   A deliberate trade-off gets a comment naming its limit and what would justify
@@ -84,29 +88,45 @@ Root is a `go.work` workspace, **not** a module — build/test per module.
   diagnostics, optimization/batching, config replacement + versioning, grid providers.
 - New distributed backend = implement `core.CASStore` **or** `core.LockStore`, then
   `core.NewCASProxyManager` / `core.NewLockProxyManager`, then run `storetest.Run` against it.
+  A backend with store-level settings of its own defines an `Option` type and a
+  `WithProxyOption` to forward core's (redisstore, pgstore, etcdstore); one with none
+  takes `core.ProxyOption` directly (mongostore). Both shapes are correct.
 - Time source: local buckets use a monotonic clock; distributed use wall-clock epoch
   (shared across nodes). The distributed clock is injectable via `WithClock`
   (a `core.ProxyOption`); `NewLocalBucket` takes no options — the local path
   injects through the unexported `newLocalBucketClock`, for tests in `core` only.
 
 ## Go version
-One version, `go 1.25.0`, for every `go.mod` and `go.work` — no per-module
-exception, no `toolchain` directive. The number tracks the highest floor any
-module's dependencies force, so it moves only when an upgrade forces it. See
-`docs/adr/0017-one-go-directive-tracks-the-dependency-floor.md`.
+The `go` directive is per module: each `go.mod` states the floor its own
+dependencies force and nothing higher (`core`, `redisstore`, `pgstore`,
+`mongostore` `1.25.0`; `etcdstore`, `examples` `1.26.0`). `go.work` is the highest
+member. No `toolchain` directive. The floor is derived, never chosen: raise a
+module only when a named dependency version forces it. Measure with `GOWORK=off`,
+and never `go mod tidy` to find out. See `docs/adr/0024-go-directive-is-per-module.md`
+(supersedes 0017).
+
+The CI `setup-go` pin is a separate knob: the newest patch of the oldest Go line
+still receiving security fixes, never below the highest directive. Do not move
+it with a directive or the reverse. See
+`docs/adr/0023-ci-toolchain-pin-tracks-a-supported-release-line.md`.
 
 ## Build & test
 `/verify` discovers the workspace modules, runs the suite, and routes failures to the
 investigator — the block below is what it does, and the fallback.
 ```bash
-export PATH="$HOME/.local/go/bin:$PATH" GOTOOLCHAIN=local   # Go is userspace, no system install
+# Go is userspace; a stale GOROOT/GOBIN from a version manager fails every build
+# with an error that does not name itself as the cause.
+unset GOROOT GOBIN && export PATH="$HOME/.local/go/bin:$PATH" GOTOOLCHAIN=local
 cd core && go test -race ./...        # algorithm + local + blocking + in-memory storetest (no container)
 cd ../redisstore && go test ./...     # testcontainers Redis
 cd ../pgstore && go test ./...        # testcontainers Postgres
+cd ../mongostore && go test ./...     # testcontainers MongoDB
+cd ../etcdstore && go test ./...      # testcontainers etcd
+cd ../examples && go build ./...      # main packages, no tests
 ```
 - Build **per module** (`cd core && go build ./...`), not `go build ./...` from root.
 - Do NOT set `GOFLAGS=-mod=mod` inside the workspace (it errors).
-- Redis/Postgres tests need a Docker-compatible runtime. With podman:
+- The four container-backed modules need a Docker-compatible runtime. With podman:
   ```bash
   export DOCKER_HOST="unix://$XDG_RUNTIME_DIR/podman/podman.sock" TESTCONTAINERS_RYUK_DISABLED=true
   # start once: podman system service --time=0 "unix://$XDG_RUNTIME_DIR/podman/podman.sock" &
