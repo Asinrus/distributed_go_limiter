@@ -1,5 +1,22 @@
 # One `go` directive everywhere, tracking the highest dependency floor
 
+**Superseded by `docs/adr/0024-go-directive-is-per-module.md`, in whole.** The
+ruling this file exists to state — one number in every `go.mod` and `go.work`,
+no per-module exception, no lower floor held by `core` — is reversed. Each
+module now declares the floor its own dependency graph forces:
+`golang.org/x/net v0.60.0`, the fix for four advisories reachable in
+`etcdstore`, declares `go 1.26.0`, and nothing in `core`, `redisstore`,
+`pgstore` or `mongostore` requires `x/net` at all. The clauses that survive
+are restated in 0024 rather than left here to be hunted for — no `toolchain`
+directive, the floor is derived and not chosen, chasing the newest Go release
+stays rejected, and the `GOWORK=off` measurement method, which is now the
+whole mechanism. Two of the premises below have also since gone:
+`docs/adr/0021-modules-version-independently-after-v0-1-0.md` retired "what
+version is this repo?" as a question a consumer asks, and
+`docs/adr/0023-ci-toolchain-pin-tracks-a-supported-release-line.md` made the
+CI pin an independent knob. Kept as the record of why one number was tried
+and what it was answering.
+
 Supersedes `docs/adr/0014-single-go-version.md`.
 
 Every `go.mod` and `go.work` states the same `go` directive, and that number is
