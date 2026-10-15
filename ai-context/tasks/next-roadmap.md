@@ -55,6 +55,7 @@ visibility flips. What this does to the ranking:
 
 - Row 15 is **no longer dormant** and is the last step of the release, not the
   first — the tags must point at a commit where everything else has landed.
+  Done: five tags cut on `d307dfd`.
 - Rows 11 and 18 are **release blockers, not tier-3 cleanup.** Stale docs cost
   nothing while nobody reads them; `README.md` is the page a stranger lands on,
   and row 18's promise has to exist *before* the v0.2 format break, not with
@@ -86,12 +87,14 @@ The `path:line` references are the evidence for each row. Rows 11, 15, 18, 24,
 7, 20 and 22 were re-pointed by T02b/T02c; the rest still read against
 `20de7dc` / `5f45eb8` and have not been re-confirmed since. If one stops
 resolving, the row is stale and the finding needs re-confirming before anyone
-works it.
+works it. Every **open** row (10, 12, 13, 14, 20, 23) was re-verified against
+`6aab8f8` after the release; all still hold, and only row 23's lines had moved
+(`pgstore/pgstore.go:88,92` → `:99,103`, corrected in the row).
 
 | # | Task | What it is | Tier |
 |---|------|-----------|------|
-| 1 | _(done)_ Go 1.23 pin (`go-version-1-23.md`) | One version across `go.work`, six `go.mod`, CI and docs, plus the ADR | — |
-| 2 | _(done)_ GitHub Actions CI (`github-actions-ci.md`) | Module-discovering workflow at Go 1.23: race, vet, gofmt, govulncheck | — |
+| 1 | _(done)_ Go 1.23 pin (`go-version-1-23.md`) | One version across `go.work`, six `go.mod`, CI and docs, plus the ADR. **Both halves of that are since reversed, so neither this row nor ADR 0017 is live authority:** the `go` directive is **per module**, each stating the floor its own dependencies force (`core` 1.25.0, `etcdstore` 1.26.0, `go.work` 1.26.0) — `docs/adr/0024-go-directive-is-per-module.md`, which supersedes 0017 in whole; and the CI pin is an independent knob — `docs/adr/0023-ci-toolchain-pin-tracks-a-supported-release-line.md`. 1.23 is history | — |
+| 2 | _(done)_ GitHub Actions CI (`github-actions-ci.md`) | Module-discovering workflow at Go 1.23: race, vet, gofmt, govulncheck. The pin is now `1.26.9` with `GOTOOLCHAIN: local` (`.github/workflows/ci.yml:15,24`) — the newest patch of the oldest Go line still getting security fixes, ADR 0023. It moved because a vulnerability-database update turned the pipeline red, not because any code changed | — |
 | 3 | _(done)_ `initialTokens` validation (`core-initial-tokens-validation.md`) | `core/bandwidth.go:50,59` — `valid()` never checks it; `n > capacity` is accepted and `core/state.go:61`'s early return means refill never clamps, so the over-capacity burst is permanent; negatives accepted too | — |
 | 4 | _(done)_ etcd lease leak (`etcdstore-lease-leak.md`) | `etcdstore/etcdstore.go:39,75` — `cli.Grant` before every `Txn` including lost CAS races, leases never revoked → ~360k live leases at 100rps with the example's 1h TTL, plus 2 RPCs per token check | — |
 | 5 | _(done)_ CAS retry hardening (`core-cas-retry-hardening.md`) | `core/command.go:24,45` — 100 retries with no backoff and no jitter. Kept separate from row 6 (ruling in both files): pacing has no AC and an open timer question, cancellation is a contract with two. Row 6 lands first and settles the one shared line — the backoff sleep is `ctx.Done()`-interruptible and returns the bare context error | — |
@@ -104,13 +107,13 @@ works it.
 | 12 | Fix dead paths | `ai-context/done/tester-e2e-sandbox-harness.md:13,24,45,46` points at `examples/k6/`; the harness lives at `e2e/k6/` (the other citation, `ai-context/PLANS.md`, is moot — that file is now deleted, `docs/adr/0016-retire-plans-md.md`) | 3 |
 | 13 | Greedy refill `ceil` | `core/state.go:158` truncates the division where it needs to round up, so a client that sleeps exactly the advertised wait is rejected again. The intervally branch two lines up (`core/state.go:138-140`) rounds up explicitly, which is the asymmetry that makes this look like a bug — but `core/state.go:6` calls the whole state a direct reduction of `BucketState64BitsInteger` (and `delayNanosForConsume`'s own doc at `core/state.go:111-113` claims nothing either way), so whoever picks this up establishes what bucket4j does *before* changing it; a decided difference from bucket4j is a different task than a fix | 3 |
 | 14 | Example hardening | All four `examples/*/main.go` echo `err.Error()` into the 503 store-failure body (`examples/redis/main.go:44`), and every backend formats the bucket key into that error (`etcdstore/etcdstore.go:28` and siblings), so the client's own IP comes back to it along with the internal failure. No `Retry-After` on the 429 either, though `TryConsumeAndReturnRemaining` already has the wait | 2 |
-| 15 | Publish v0.1.0 (`publish-v0.1.0.md`) | **No longer dormant — ruling (1) reversed.** Now the *tagging* ticket and the last step of the release: require `core v0.1.0`, **keep every `replace`**, cut five `*/v0.1.0` tags. Blocker (c) is the latent defect `go.work` and the `replace` lines hide together (`redisstore/go.mod:6,65` and siblings) — `AC-61`. **Correction to this row's own claim:** "drop the `replace` lines" and "three commits, it cannot be one commit" were both wrong — the lines are load-bearing and the bump is one commit followed by five tags, ruled in `docs/adr/0022-replace-directives-are-not-redundant.md`. Blocked by rows 11, 18, 24, 25 and 26; PRs #25–#30 have all landed (`890f6b1`). Blocker (a) (private) is deferred, so the release is *tagged but unpublished* | now |
+| 15 | _(done)_ Publish v0.1.0 (`ai-context/done/publish-v0.1.0.md`) | Five annotated `*/v0.1.0` tags — `core`, `redisstore`, `pgstore`, `mongostore`, `etcdstore` — all on `d307dfd`, `examples` untagged by design (ADR 0019). One commit bumped every store to require `core v0.1.0` and **kept every `replace`**, per `docs/adr/0022-replace-directives-are-not-redundant.md`; this row's earlier "drop the `replace` lines" and "three commits" claims were both wrong. Blocker (c) — the latent defect `go.work` and the `replace` lines hid together (`redisstore/go.mod:6,65` and siblings) — is closed by **AC-61 passing**: a scratch module outside the workspace, no `replace`, `GOWORK=off`, resolved `core` to `v0.1.0` and compiled, independently reproduced. Blocker (a) (visibility) is still open, so the release is *tagged but unpublished* | — |
 | 16 | _(closed)_ | No open questions remain in `ai-context/tasks/`. `plans-md-vs-changelog.md` ruled (ADR 0016), `q5-pgstore-identifier-behavior-change.md` and `q9-errstore-contract-ac.md` in `done/`, `vendor-hazelcast-store.md` answered by ruling (6) and moved | — |
 | 17 | Codec format change: multi-bandwidth + config fingerprint | Planned for **v0.2**. One format break carries both — the multi-bandwidth layout (N states instead of one, per ADR 0001, which deferred it from v1 and is not contradicted by planning it for v0.2) and the config fingerprint from row 9. Needs its own task file and probably an ADR before anyone writes code | later |
 | 18 | _(done)_ Say the codec layout is unstable (`t09-codec-layout-is-unstable.md`) | **Release blocker now, not tier 3** — a v0.1.0 that stays silent makes row 17's v0.2 format break a breaking surprise. Nothing states that `core/codec.go:8-15`'s byte layout may change before v1.0. **Correction to this row's own claim:** only `docs/client/redis.md:54` and `etcd.md:41` have a "What is stored" section; `postgres.md:28` and `mongodb.md:22` call it "Schema". All four get the promise, under whichever heading they already use. The format itself is already pinned by `core/codec_test.go:44`, so no new test — the tripwire exists, it just does not say where the promise lives | — |
 | 19 | Cut store round-trips without vendor code | Owner constraint, ruling (3): `core` stays vendor-agnostic — no per-vendor knowledge, no backend-specific fast paths. The way to reduce calls is the command layer (`core/command.go`), so every backend inherits it; bucket4j's optimization controllers (batching, prediction, delayed writes) are the reference. **Unscoped** — `CLAUDE.md` lists optimization/batching as deferred from v1 (ADR 0001), and this needs Architect scoping and a task file before anyone implements it | later |
-| 20 | Vendor ctx conformance (`vendor-ctx-conformance.md`) | **Un-deferred** — the etcd question is answered (it stays, as a peer; `ai-context/done/etcd-as-a-main-backend.md`), so this covers four backends. Filed as a bug hunt; the premise was false — all four drivers already return `errors.Is(err, context.Canceled)`, etcd included (`ContextError`, `client.go:578-598`). Reframed as a regression guard against a driver upgrade or a fifth backend dropping the property. Still real: nothing in the repo exercises a cancelled ctx against a real backend | 2 |
-| 23 | pgstore lock retry pacing (`t06-pgstore-lock-retry-pacing.md`) | `pgstore/pgstore.go:88,92` — `maxLockRetries = 16` in a tight loop with no backoff, no jitter and no ctx check between attempts. The CAS path got exactly this treatment (PR #17 / AC-55) and the `LockStore` side never did; 16 is the budget `core/command.go`'s own measurement rejected. **AC-60.** The design question is **ruled** — pacing lives in pgstore as pgstore configuration, `core`'s surface stays closed, `LockStore.Do` keeps its single-`error` signature. Queued as a follow-up; the owner chose not to build it this round | 2 |
+| 20 | Vendor ctx conformance (`vendor-ctx-conformance.md`) | **Un-deferred** — the etcd question is answered (it stays, as a peer; `ai-context/done/etcd-as-a-main-backend.md`), so this covers four backends. Filed as a bug hunt; the premise was false — all four drivers already return `errors.Is(err, context.Canceled)`, etcd included (`ContextError`, `client.go:578-598`). Reframed as a regression guard against a driver upgrade or a fifth backend dropping the property. Still real: nothing in the repo exercises a cancelled ctx against a real backend — every `context.WithCancel` in the tree is in `core`'s own tests. **Top of the queue now that the release is gone**: it is the only open row with a task file already written | now |
+| 23 | pgstore lock retry pacing (`t06-pgstore-lock-retry-pacing.md`) | `pgstore/pgstore.go:99,103` — `maxLockRetries = 16` in a tight loop with no backoff, no jitter and no ctx check between attempts. The CAS path got exactly this treatment (PR #17 / AC-55) and the `LockStore` side never did; 16 is the budget `core/command.go`'s own measurement rejected. **AC-60.** The design question is **ruled** — pacing lives in pgstore as pgstore configuration, `core`'s surface stays closed, `LockStore.Do` keeps its single-`error` signature. **Deferred out of v0.1.0 by an owner decision, not by oversight** — the ticket stays in `ai-context/tasks/`, scoped and ready, and tier 1 is where it sits until the owner picks it up | 1 |
 | 22 | _(done)_ Refund a cancelled blocking reservation (`t03-reservation-semantics.md`, spec in `ai-context/done/core-blocking-reservation-refund.md`) | `core/ops.go:90` deducts before the sleep and the write is persisted, so a cancel at `core/blocking.go:54-55` leaves the tokens spent for a request nobody was served — `core/blocking.go:22-23` documents that as intended and the owner has ruled it is not. Compensating release through the executor on the cancel branch, best-effort but reported (AC-54). Now framed as a **decided difference** from bucket4j, not a bug fix — upstream never refunds, on purpose (ADR 0018) | — |
 | 24 | _(done)_ Apache-2.0 license (`t07-apache-2-0-license.md`) | Blocker (b) of the release, decided: Apache-2.0 in the repo root and all six module roots, because a Go module is fetched on its own and pkg.go.dev renders nothing for a module whose license it cannot recognise (`gh repo view --json licenseInfo` → `null` today). Plus one `NOTICE`, root only — bucket4j ships no `NOTICE` (checked), so §4(d) propagates nothing and the file is voluntary attribution, not compliance. ADR 0019 | — |
 | 25 | _(done)_ `CHANGELOG.md` at v0.1.0 (`t10-changelog-starts-at-v0-1-0.md`) | ADR 0016 retired `PLANS.md` with "no replacement changelog file" — about *internal tracking*, and it rejected a consumer changelog "for now, not forever" with the trigger named: *revisit if/when a version is actually cut*. Both of its grounds have expired (ADR 0019 gives a version scope; there is a release), so the file exists — ADR 0020, and 0016 has a pointer to it | — |
@@ -131,19 +134,24 @@ are stable, so the gap in the table is left rather than renumbered.
 Row 14 is stated more narrowly than the audit that raised it: the 429 body is
 already a fixed string, so the leak is on the 503 path, not the 429 one.
 
-**Row 15 is the only release row still `now`.** 24, 25, 26, 11 and 18 landed in
-PRs #33–#36 — licenses and `NOTICE` in all seven roots, `CHANGELOG.md` at
-`0.1.0 - UNRELEASED`, `core/doc.go` plus two runnable examples, a
-release-accurate `README.md`, and the pre-v1.0 codec promise in all four
-`docs/client/*.md`. Their task files stay in `ai-context/tasks/` until the
-tester moves them. 15 cuts the tags last, because a tag cannot be moved once
-anyone has fetched it; every store's `go.mod` still requires `core v0.0.0` and
-no tag exists yet. The step sequence is in `publish-v0.1.0.md`, not duplicated
-here. `AC-61` is taken by row 15 and is
-the only new AC id in the release round — the other five rows produce
+**The release happened; no row is a release blocker any more.** Rows 24, 25,
+26, 11 and 18 landed in PRs #33–#36, row 15 in PR #44, and all five tags point
+at `d307dfd`. The tags are **immutable** — a tag cannot be moved once anyone
+has fetched it, so a correction ships as `v0.1.1`, never as a re-tag. `AC-61`
+is still the only AC id the release round minted: the other five rows produced
 artefacts (a file, a comment, a paragraph), not behavioural criteria, and
 minting ids for those would dilute a registry whose only index is
-`grep -rn 'AC-'`.
+`grep -rn 'AC-'`. The single thing left open is blocker (a), **visibility** —
+the repo is private, which is the whole reason v0.1.0 is *tagged but
+unpublished*: pkg.go.dev indexes nothing and a consumer needs `GOPRIVATE`. It
+is an owner decision and no row below waits on it.
+
+**Ranking after the release.** Row 20 is the only `now` — it is the one open
+row whose task file is already written. Row 23 is tier 1, deferred by decision
+rather than by oversight. Tier 2 is rows 14 then 10, in that order: `examples/`
+is the code a reader copies and it is now part of a tagged release, so the 503
+leak outranks the memstore sweeper. Rows 12 and 13 stay tier 3, rows 17 and 19
+later. No new rows — v0.2 is not being planned.
 
 ## Later / unscheduled
 
