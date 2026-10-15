@@ -5,9 +5,21 @@ Supersedes `docs/adr/0014-single-go-version.md`.
 Every `go.mod` and `go.work` states the same `go` directive, and that number is
 the **highest floor any module's own dependencies force** — today `go 1.25.0`.
 There is no per-module exception, no lower "consumer" floor held by `core`, and
-still no `toolchain` directive. CI's `setup-go` pin is the newest patch of that
-minor line (today `1.25.14`) with `GOTOOLCHAIN=local`, so the pin is enforced
-rather than silently upgraded and stdlib advisories on the line are covered.
+still no `toolchain` directive. CI's `setup-go` pin carries
+`GOTOOLCHAIN=local`, so the pin is enforced rather than silently upgraded.
+
+**Correction**, from
+`docs/adr/0023-ci-toolchain-pin-tracks-a-supported-release-line.md`: the
+sentence above originally set that pin at *"the newest patch of that minor
+line (today `1.25.14`) … so stdlib advisories on the line are covered."* The
+closing promise is not achievable. Go ships security fixes only to its two
+newest major releases, so once the directive's minor line leaves that window
+its newest patch is permanently vulnerable — GO-2026-6607 is fixed in `1.26.9`
+and `1.27.2`, and never in `1.25`. The pin tracks the oldest Go line still
+receiving security fixes, today `1.26.9`; it is chosen independently of the
+`go` directive, subject only to being at least as new. Everything else in this
+ADR — one directive, derived from the dependency floor, no per-module
+exception, no `toolchain` directive — is unchanged by 0023.
 
 ## Why 0014's escape hatch had to go
 
