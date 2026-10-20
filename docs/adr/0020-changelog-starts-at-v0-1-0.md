@@ -62,3 +62,11 @@ version independently after `v0.1.0`, so "one number" is no longer the reason
 one file is right. The decision — a root `CHANGELOG.md`, Keep a Changelog,
 starting at v0.1.0 — is unaffected; entries now name the module and version a
 change lands in.
+
+**Correction, 2026-10-20.** The rejection of GitHub release notes above leans
+on their being "invisible while the repo is private (ADR 0019), which is
+exactly the window v0.1.0 ships in". The repo went public on 2026-10-20 and a
+GitHub Release now exists at `core/v0.1.0`, so that clause has expired. The
+rejection stands on its other ground, which never depended on visibility:
+release notes live outside the module zip, so `go get` and a vendored tree
+never see them.
