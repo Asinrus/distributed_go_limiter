@@ -13,9 +13,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning:
 
 ## 0.1.0 - 2026-10-15
 
-First release. This repository stays private at this tag — the artefacts are
-tagged and verifiable by the owner, but not yet fetchable or indexed anywhere
-public.
+First release.
+
+> **Note, 2026-10-20.** This entry originally read: *"First release. This
+> repository stays private at this tag — the artefacts are tagged and
+> verifiable by the owner, but not yet fetchable or indexed anywhere public."*
+> The repository was made public on 2026-10-20 with no tag moved, so all five
+> modules are fetchable from `proxy.golang.org` and need no `GOPRIVATE`. The
+> released artefacts are unchanged; only that sentence was.
 
 ### Added
 
