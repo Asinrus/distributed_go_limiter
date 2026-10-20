@@ -1,5 +1,11 @@
 # v0.1.0 is five lockstep-tagged modules under Apache-2.0, tagged but unpublished
 
+**Correction, 2026-10-20: the title's closing clause no longer holds.** The
+repository was made public on 2026-10-20 and v0.1.0 is published; no tag
+moved. The detail is at the end of this file, under "Tagged, not published".
+Everything else here — Apache-2.0 in seven roots, one `NOTICE`, `examples`
+never tagged — is unchanged.
+
 The owner reversed the "portfolio / reference implementation, no near-term
 release" ruling that kept `ai-context/tasks/publish-v0.1.0.md` dormant and
 that ADR 0016 leaned on. Everything for a first release is to be prepared.
@@ -110,3 +116,24 @@ exists to fix (`replace` + `require core v0.0.0`, blocker (c)) **cannot be
 fixed without a real version to require**, and cannot be verified without a
 fetchable tag. Waiting until the repo is public means discovering it on the
 day it is most expensive.
+
+**Correction, 2026-10-20 — blocker (a) is resolved.** The two paragraphs above
+were right for the window they describe and are kept as the record of it.
+What has expired: the repository is **public** as of 2026-10-20, on the
+owner's instruction, so "the repository stays private for now", "pkg.go.dev
+will not index anything while the repo is private" and "`go get` works only
+for a caller who is authenticated against the repo
+(`GOPRIVATE=github.com/asinrus/*`)" are all now false. The five tags are
+untouched — still `v0.1.0` on `d307dfd`, nothing retagged — and a GitHub
+Release exists at `core/v0.1.0`.
+
+Verified, not assumed: a module outside this repo with `GOPRIVATE` unset,
+`GOWORK=off`, `GOPROXY=https://proxy.golang.org` and `GOSUMDB=sum.golang.org`
+fetched `redisstore@v0.1.0`, resolved `core` to `v0.1.0`, and compiled, and
+`proxy.golang.org/github.com/asinrus/distributed_go_limiter/core/@v/list`
+returns `v0.1.0` — so the modules are permanently archived in the public proxy
+and checksum database. GitHub's REST API detects the license as `Apache-2.0`
+(the GraphQL `licenseInfo` field was stale and reported none; a red herring,
+not a defect). v0.1.0 is therefore **published**, not *tagged but
+unpublished*. pkg.go.dev had not rendered the modules yet at the time of
+writing: that is indexing lag after a first fetch, and needs no action.
