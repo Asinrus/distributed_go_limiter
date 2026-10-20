@@ -165,19 +165,21 @@ func TestCASBackoff_RetryDelaysGrowAndAreNotIdentical(t *testing.T) {
 		t.Fatalf("all backoff delays identical: %v (fixed backoff resynchronizes the herd instead of dispersing it)", spy.delays)
 	}
 
-	// Full jitter draws uniformly under a per-attempt ceiling that doubles up to
-	// backoffCap, so the average of the later (larger-ceiling) delays should be
-	// well above the average of the earliest ones. With ceilings 1,2,4ms vs
-	// 16,32,32ms this holds under virtually any draw.
-	var early, late time.Duration
-	for _, d := range spy.delays[:3] {
-		early += d
+	// Draws are random, so growth is asserted as a hard per-attempt ceiling
+	// (deterministic) plus a late delay above the first ceiling (fails only if all
+	// five late draws land under 1ms, ~2e-7).
+	var maxLate time.Duration
+	for i, d := range spy.delays {
+		ceil := min(backoffBase<<uint(i), backoffCap)
+		if d < 0 || d >= ceil {
+			t.Fatalf("delay %d = %v, want in [0, %v)", i, d, ceil)
+		}
+		if i >= 3 {
+			maxLate = max(maxLate, d)
+		}
 	}
-	for _, d := range spy.delays[5:8] {
-		late += d
-	}
-	if late <= early {
-		t.Fatalf("backoff did not grow: early delays %v, late delays %v", spy.delays[:3], spy.delays[5:8])
+	if maxLate < backoffBase {
+		t.Fatalf("backoff did not grow: late delays %v all under the first ceiling %v", spy.delays[3:], backoffBase)
 	}
 }
 
