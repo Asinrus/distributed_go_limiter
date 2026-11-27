@@ -92,3 +92,11 @@ version in `require`. Verified: `GOWORK=off go list -m .../core` in
 `redisstore` reports `"Version": "v0.1.0"` with `"Replace"` pointing at
 `../core`. The command is right for developing a pair and wrong for certifying
 a released one; 0021 now says which is which.
+
+**Correction, 2026-10-20.** The rejected alternative above prices a mandatory
+fetch of this repo's own tags as a cost paid "permanently, for a repo that is
+private". The repo went public on 2026-10-20, so that fetch would no longer
+need credentials and the clause has expired. The ruling is unchanged: the
+`replace` lines stay, because making `cd core && go test` depend on a network
+fetch of this repo's own tags is worth avoiding whether or not the fetch is
+authenticated.

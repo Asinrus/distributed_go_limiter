@@ -49,9 +49,10 @@ longer "a portfolio implementation with no near-term release". Four decisions
 came with the reversal, ratified in
 `docs/adr/0019-v0-1-0-is-five-lockstep-modules-under-apache-2-0.md`: Apache-2.0
 in all seven roots, `v0.1.0` across the five library modules (`examples`
-untagged), PRs #25–#30 land first, and the repo **stays private** —
-so v0.1.0 is *tagged but unpublished* and pkg.go.dev indexes nothing until
-visibility flips. What this does to the ranking:
+untagged), PRs #25–#30 land first, and the repo stays private through
+tagging. That last decision has since been carried out and reversed: the repo
+was **made public on 2026-10-20**, closing blocker (a), and v0.1.0 is
+fetchable from `proxy.golang.org` with no `GOPRIVATE`. What this does to the ranking:
 
 - Row 15 is **no longer dormant** and is the last step of the release, not the
   first — the tags must point at a commit where everything else has landed.
@@ -107,7 +108,7 @@ works it. Every **open** row (10, 12, 13, 14, 20, 23) was re-verified against
 | 12 | Fix dead paths | `ai-context/done/tester-e2e-sandbox-harness.md:13,24,45,46` points at `examples/k6/`; the harness lives at `e2e/k6/` (the other citation, `ai-context/PLANS.md`, is moot — that file is now deleted, `docs/adr/0016-retire-plans-md.md`) | 3 |
 | 13 | Greedy refill `ceil` | `core/state.go:158` truncates the division where it needs to round up, so a client that sleeps exactly the advertised wait is rejected again. The intervally branch two lines up (`core/state.go:138-140`) rounds up explicitly, which is the asymmetry that makes this look like a bug — but `core/state.go:6` calls the whole state a direct reduction of `BucketState64BitsInteger` (and `delayNanosForConsume`'s own doc at `core/state.go:111-113` claims nothing either way), so whoever picks this up establishes what bucket4j does *before* changing it; a decided difference from bucket4j is a different task than a fix | 3 |
 | 14 | Example hardening | All four `examples/*/main.go` echo `err.Error()` into the 503 store-failure body (`examples/redis/main.go:44`), and every backend formats the bucket key into that error (`etcdstore/etcdstore.go:28` and siblings), so the client's own IP comes back to it along with the internal failure. No `Retry-After` on the 429 either, though `TryConsumeAndReturnRemaining` already has the wait | 2 |
-| 15 | _(done)_ Publish v0.1.0 (`ai-context/done/publish-v0.1.0.md`) | Five annotated `*/v0.1.0` tags — `core`, `redisstore`, `pgstore`, `mongostore`, `etcdstore` — all on `d307dfd`, `examples` untagged by design (ADR 0019). One commit bumped every store to require `core v0.1.0` and **kept every `replace`**, per `docs/adr/0022-replace-directives-are-not-redundant.md`; this row's earlier "drop the `replace` lines" and "three commits" claims were both wrong. Blocker (c) — the latent defect `go.work` and the `replace` lines hid together (`redisstore/go.mod:6,65` and siblings) — is closed by **AC-61 passing**: a scratch module outside the workspace, no `replace`, `GOWORK=off`, resolved `core` to `v0.1.0` and compiled, independently reproduced. Blocker (a) (visibility) is still open, so the release is *tagged but unpublished* | — |
+| 15 | _(done)_ Publish v0.1.0 (`ai-context/done/publish-v0.1.0.md`) | Five annotated `*/v0.1.0` tags — `core`, `redisstore`, `pgstore`, `mongostore`, `etcdstore` — all on `d307dfd`, `examples` untagged by design (ADR 0019). One commit bumped every store to require `core v0.1.0` and **kept every `replace`**, per `docs/adr/0022-replace-directives-are-not-redundant.md`; this row's earlier "drop the `replace` lines" and "three commits" claims were both wrong. Blocker (c) — the latent defect `go.work` and the `replace` lines hid together (`redisstore/go.mod:6,65` and siblings) — is closed by **AC-61 passing**: a scratch module outside the workspace, no `replace`, `GOWORK=off`, resolved `core` to `v0.1.0` and compiled, independently reproduced. Blocker (a) (visibility) closed **2026-10-20**: the repo is public, no tag moved, and a module outside the repo with `GOPRIVATE` unset fetched `redisstore@v0.1.0` from `proxy.golang.org`, resolved `core` to `v0.1.0` and compiled | — |
 | 16 | _(closed)_ | No open questions remain in `ai-context/tasks/`. `plans-md-vs-changelog.md` ruled (ADR 0016), `q5-pgstore-identifier-behavior-change.md` and `q9-errstore-contract-ac.md` in `done/`, `vendor-hazelcast-store.md` answered by ruling (6) and moved | — |
 | 17 | Codec format change: multi-bandwidth + config fingerprint | Planned for **v0.2**. One format break carries both — the multi-bandwidth layout (N states instead of one, per ADR 0001, which deferred it from v1 and is not contradicted by planning it for v0.2) and the config fingerprint from row 9. Needs its own task file and probably an ADR before anyone writes code | later |
 | 18 | _(done)_ Say the codec layout is unstable (`t09-codec-layout-is-unstable.md`) | **Release blocker now, not tier 3** — a v0.1.0 that stays silent makes row 17's v0.2 format break a breaking surprise. Nothing states that `core/codec.go:8-15`'s byte layout may change before v1.0. **Correction to this row's own claim:** only `docs/client/redis.md:54` and `etcd.md:41` have a "What is stored" section; `postgres.md:28` and `mongodb.md:22` call it "Schema". All four get the promise, under whichever heading they already use. The format itself is already pinned by `core/codec_test.go:44`, so no new test — the tripwire exists, it just does not say where the promise lives | — |
@@ -141,10 +142,10 @@ has fetched it, so a correction ships as `v0.1.1`, never as a re-tag. `AC-61`
 is still the only AC id the release round minted: the other five rows produced
 artefacts (a file, a comment, a paragraph), not behavioural criteria, and
 minting ids for those would dilute a registry whose only index is
-`grep -rn 'AC-'`. The single thing left open is blocker (a), **visibility** —
-the repo is private, which is the whole reason v0.1.0 is *tagged but
-unpublished*: pkg.go.dev indexes nothing and a consumer needs `GOPRIVATE`. It
-is an owner decision and no row below waits on it.
+`grep -rn 'AC-'`. Blocker (a), **visibility**, closed on 2026-10-20: the repo
+is public, no tag moved, a GitHub Release exists at `core/v0.1.0`, and the
+five modules are archived in `proxy.golang.org` and `sum.golang.org`. v0.1.0
+is published; nothing from the release round is open.
 
 **Ranking after the release.** Row 20 is the only `now` — it is the one open
 row whose task file is already written. Row 23 is tier 1, deferred by decision
